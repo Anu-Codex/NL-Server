@@ -1,101 +1,120 @@
+require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
-const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
-require('dotenv').config();
 
 const app = express();
-app.use(express.json());
 app.use(cors());
+app.use(express.json());
 
-// --- MONGODB CONNECTION ---
-mongoose.connect(process.env.MONGO_URI)
-  .then(() => console.log('MongoDB Connected to Nexus DB'))
-  .catch(err => console.log(err));
+// MongoDB Connection
+mongoose.connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true })
+    .then(() => console.log('MongoDB Connected'))
+    .catch(err => console.log(err));
 
-// --- DATABASE MODELS ---
-const Admin = mongoose.model('Admin', new mongoose.Schema({
-    email: { type: String, required: true, unique: true },
-    password: { type: String, required: true }
-}));
-
-const Player = mongoose.model('Player', new mongoose.Schema({
+// --- Mongoose Models ---
+const PlayerSchema = new mongoose.Schema({
     name: String,
-    elo: Number,
-    winRate: String
-}));
+    photoUrl: String,
+    wins: { type: Number, default: 0 },
+    draws: { type: Number, default: 0 },
+    losses: { type: Number, default: 0 },
+    points: { type: Number, default: 0 },
+    previousRank: { type: Number, default: 0 },
+    currentRank: { type: Number, default: 0 }
+});
+const Player = mongoose.model('Player', PlayerSchema);
 
-const Tournament = mongoose.model('Tournament', new mongoose.Schema({
+const TournamentSchema = new mongoose.Schema({
     name: String,
-    status: { type: String, default: 'Upcoming' },
-    matches:[{ teamA: String, teamB: String, scoreA: Number, scoreB: Number, isComplete: Boolean }]
-}));
+    status: { type: String, enum:['past', 'live', 'upcoming'], default: 'upcoming' },
+    winner: String,
+    secondPlace: String,
+    thirdPlace: String,
+    matches:[{ team1: String, team2: String, score1: Number, score2: Number, status: String }]
+});
+const Tournament = mongoose.model('Tournament', TournamentSchema);
 
-// --- AUTH MIDDLEWARE ---
-const authenticateToken = (req, res, next) => {
-    const token = req.header('Authorization')?.split(' ')[1];
-    if (!token) return res.status(401).json({ message: 'Access Denied' });
-    try {
-        const verified = jwt.verify(token, process.env.JWT_SECRET);
-        req.admin = verified;
+const SubscriberSchema = new mongoose.Schema({ email: String });
+const Subscriber = mongoose.model('Subscriber', SubscriberSchema);
+
+// --- Middleware ---
+const verifyAdmin = (req, res, next) => {
+    const token = req.headers['authorization'];
+    if (!token) return res.status(403).json({ message: 'No token provided' });
+    jwt.verify(token.split(" ")[1], process.env.JWT_SECRET, (err, decoded) => {
+        if (err) return res.status(500).json({ message: 'Failed to authenticate token' });
         next();
-    } catch (err) {
-        res.status(400).json({ message: 'Invalid Token' });
-    }
+    });
 };
 
-// --- API ROUTES: ADMIN AUTH ---
-// Run this ONCE via Postman to create your first admin account, then remove/comment out
-app.post('/api/admin/setup', async (req, res) => {
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash('admin123', salt);
-    const newAdmin = new Admin({ email: 'admin@nexus.com', password: hashedPassword });
-    await newAdmin.save();
-    res.json({ message: 'Admin created! Email: admin@nexus.com, Pass: admin123' });
+// --- Routes ---
+// 1. Auth (Specific Email & Pass in .env)
+app.post('/api/login', (req, res) => {
+    const { email, password } = req.body;
+    if (email === process.env.ADMIN_EMAIL && password === process.env.ADMIN_PASS) {
+        const token = jwt.sign({ role: 'admin' }, process.env.JWT_SECRET, { expiresIn: '24h' });
+        res.json({ token });
+    } else {
+        res.status(401).json({ message: 'Invalid credentials' });
+    }
 });
 
-app.post('/api/admin/login', async (req, res) => {
-    const admin = await Admin.findOne({ email: req.body.email });
-    if (!admin) return res.status(400).json({ message: 'Admin not found' });
-
-    const validPass = await bcrypt.compare(req.body.password, admin.password);
-    if (!validPass) return res.status(400).json({ message: 'Invalid password' });
-
-    const token = jwt.sign({ _id: admin._id }, process.env.JWT_SECRET);
-    res.header('Authorization', token).json({ token, message: 'Logged in successfully' });
-});
-
-// --- API ROUTES: PLAYERS (Rankings) ---
+// 2. Public Routes
 app.get('/api/players', async (req, res) => {
-    const players = await Player.find().sort({ elo: -1 }); // Highest ELO first
+    const players = await Player.find().sort({ points: -1 }).limit(100);
     res.json(players);
 });
 
-app.post('/api/players', authenticateToken, async (req, res) => {
-    const newPlayer = new Player(req.body);
+app.get('/api/tournaments', async (req, res) => {
+    const tournaments = await Tournament.find().sort({ _id: -1 });
+    res.json(tournaments);
+});
+
+app.post('/api/subscribe', async (req, res) => {
+    const newSub = new Subscriber({ email: req.body.email });
+    await newSub.save();
+    res.json({ message: 'Subscribed successfully!' });
+});
+
+// 3. Admin Protected Routes (Players)
+app.post('/api/players', verifyAdmin, async (req, res) => {
+    const { wins, draws } = req.body;
+    const points = (wins * 3) + (draws * 1);
+    const newPlayer = new Player({ ...req.body, points });
     await newPlayer.save();
     res.json(newPlayer);
 });
 
-// --- API ROUTES: TOURNAMENTS ---
-app.get('/api/tournaments', async (req, res) => {
-    const tournaments = await Tournament.find();
-    res.json(tournaments);
+app.put('/api/players/:id', verifyAdmin, async (req, res) => {
+    const { wins, draws } = req.body;
+    const points = (wins * 3) + (draws * 1);
+    const updated = await Player.findByIdAndUpdate(req.params.id, { ...req.body, points }, { new: true });
+    res.json(updated);
 });
 
-app.post('/api/tournaments', authenticateToken, async (req, res) => {
-    const newTournament = new Tournament(req.body);
-    await newTournament.save();
-    res.json(newTournament);
+app.delete('/api/players/:id', verifyAdmin, async (req, res) => {
+    await Player.findByIdAndDelete(req.params.id);
+    res.json({ message: 'Deleted' });
 });
 
-app.put('/api/tournaments/:id/match', authenticateToken, async (req, res) => {
-    const tournament = await Tournament.findById(req.params.id);
-    tournament.matches.push(req.body); // Add a match
-    await tournament.save();
-    res.json(tournament);
+// 4. Admin Protected Routes (Tournaments)
+app.post('/api/tournaments', verifyAdmin, async (req, res) => {
+    const newTour = new Tournament(req.body);
+    await newTour.save();
+    res.json(newTour);
+});
+
+app.put('/api/tournaments/:id', verifyAdmin, async (req, res) => {
+    const updated = await Tournament.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    res.json(updated);
+});
+
+app.delete('/api/tournaments/:id', verifyAdmin, async (req, res) => {
+    await Tournament.findByIdAndDelete(req.params.id);
+    res.json({ message: 'Deleted' });
 });
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`Command Center running on port ${PORT}`));
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
