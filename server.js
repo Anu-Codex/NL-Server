@@ -22,10 +22,43 @@ const Player = mongoose.models.Player || mongoose.model('Player', new mongoose.S
     previousRank: { type: Number, default: 0 }
 }), 'players');
 
+// 1. Update Tournament Schema
 const Tournament = mongoose.models.Tournament || mongoose.model('Tournament', new mongoose.Schema({
-    title: String, totalTeams: String, status: String, winner: String,
-    fixtureLink: String, rosterLink: String, joinLink: String, prize: String, date: String
+    title: String,
+    totalTeams: String,
+    status: String,
+    winner: String,
+    fixtureLink: String,
+    rosterLink: String,
+    joinLink: String,
+    prize: String,
+    date: String,
+    // NEW NESTED STRUCTURE: Team Name -> Array of Players
+    roster: [{ 
+        teamName: String, 
+        players: [String] 
+    }] 
 }), 'tournaments');
+
+// 2. Optimized Roster Endpoint
+app.post('/api/update-roster', async (req, res) => {
+    const { tourId, teamName, playerName, action } = req.body;
+    try {
+        const tour = await Tournament.findById(tourId);
+        if (action === 'add') {
+            let team = tour.roster.find(t => t.teamName === teamName);
+            if (team) {
+                team.players.push(playerName);
+            } else {
+                tour.roster.push({ teamName, players: [playerName] });
+            }
+        } else if (action === 'remove-team') {
+            tour.roster = tour.roster.filter(t => t._id.toString() !== req.body.teamId);
+        }
+        await tour.save();
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
 
 // 4. RANKINGS ROUTE
 app.get('/api/rankings', async (req, res) => {
