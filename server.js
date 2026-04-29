@@ -22,7 +22,7 @@ const Player = mongoose.models.Player || mongoose.model('Player', new mongoose.S
     previousRank: { type: Number, default: 0 }
 }), 'players');
 
-// 1. Update Tournament Schema
+// --- UPDATE TOURNAMENT SCHEMA ---
 const Tournament = mongoose.models.Tournament || mongoose.model('Tournament', new mongoose.Schema({
     title: String,
     totalTeams: String,
@@ -33,12 +33,37 @@ const Tournament = mongoose.models.Tournament || mongoose.model('Tournament', ne
     joinLink: String,
     prize: String,
     date: String,
-    // NEW NESTED STRUCTURE: Team Name -> Array of Players
-    roster: [{ 
-        teamName: String, 
-        players: [String] 
-    }] 
+    roster: [{ teamName: String, players: [String] }],
+    // NEW FIELD: Match Data
+    matches: [{
+        round: String, // e.g., "Round of 16", "Semi-Final"
+        p1: String,    // Player/Team 1
+        p2: String,    // Player/Team 2
+        s1: { type: String, default: "-" }, // Score 1
+        s2: { type: String, default: "-" }, // Score 2
+        isLive: { type: Boolean, default: false }
+    }]
 }), 'tournaments');
+
+// --- NEW ROUTE: UPDATE MATCHES ---
+app.post('/api/update-bracket', async (req, res) => {
+    const { tourId, matchData, action, matchId } = req.body;
+    try {
+        const tour = await Tournament.findById(tourId);
+        if (action === 'add') {
+            tour.matches.push(matchData);
+        } else if (action === 'update-score') {
+            const match = tour.matches.id(matchId);
+            match.s1 = matchData.s1;
+            match.s2 = matchData.s2;
+            match.isLive = matchData.isLive;
+        } else if (action === 'delete') {
+            tour.matches.pull(matchId);
+        }
+        await tour.save();
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
 
 // 2. Optimized Roster Endpoint
 app.post('/api/update-roster', async (req, res) => {
