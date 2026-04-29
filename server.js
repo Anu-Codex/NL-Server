@@ -83,15 +83,24 @@ app.post('/api/adjust-points', async (req, res) => {
         res.json({ success: true });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
-// RESET ALL RANKINGS TO ZERO
+// --- RESET ALL PLAYERS TO ZERO ---
 app.post('/api/reset-rankings', async (req, res) => {
     try {
-        await Player.updateMany({}, { 
-            $set: { wins: 0, points: 0, previousRank: 0 } 
+        console.log("Reset Request Received");
+        // This targets every single player and wipes their scores
+        const result = await Player.updateMany({}, { 
+            $set: { 
+                wins: 0, 
+                points: 0, 
+                previousRank: 0 
+            } 
         });
+        
+        console.log("Reset Success:", result);
         res.json({ success: true, message: "All rankings reset!" });
     } catch (err) {
-        res.status(500).json({ error: "Reset failed" });
+        console.error("Reset Error:", err);
+        res.status(500).json({ error: "Reset failed", details: err.message });
     }
 });
 
