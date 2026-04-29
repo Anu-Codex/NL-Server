@@ -169,6 +169,28 @@ app.post('/api/manage-tournament', async (req, res) => {
         res.status(500).json({ error: "Failed to save tournament" });
     }
 });
+// DELETE PLAYER FROM DATABASE
+app.delete('/api/delete-player/:name', async (req, res) => {
+    const playerName = req.params.name;
+    
+    try {
+        const deletedPlayer = await Player.findOneAndDelete({ name: playerName });
+        
+        if (!deletedPlayer) {
+            return res.status(404).json({ error: "Player not found" });
+        }
+
+        // Optional: Recalculate ranks for everyone else after a player is removed
+        const allPlayers = await Player.find().sort({ points: -1, wins: -1 });
+        for (let i = 0; i < allPlayers.length; i++) {
+            await Player.findByIdAndUpdate(allPlayers[i]._id, { previousRank: i + 1 });
+        }
+
+        res.json({ success: true, message: `Player ${playerName} deleted forever.` });
+    } catch (err) {
+        res.status(500).json({ error: "Failed to delete player" });
+    }
+});
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server live on ${PORT}`));
