@@ -35,13 +35,13 @@ const Tournament = mongoose.models.Tournament || mongoose.model('Tournament', ne
     date: String,
     roster: [{ teamName: String, players: [String] }],
     // NEW FIELD: Match Data
-    matches: [{
-        round: String, // e.g., "Round of 16", "Semi-Final"
-        p1: String,    // Player/Team 1
-        p2: String,    // Player/Team 2
-        s1: { type: String, default: "-" }, // Score 1
-        s2: { type: String, default: "-" }, // Score 2
-        isLive: { type: Boolean, default: false }
+    fixtures: [{
+        stageName: String,
+        matches: [{
+            p1: String, p2: String,
+            s1: { type: String, default: "-" },
+            s2: { type: String, default: "-" }
+        }]
     }]
 }), 'tournaments');
 
