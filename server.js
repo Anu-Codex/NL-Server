@@ -4,20 +4,6 @@ const cors = require('cors');
 require('dotenv').config();
 
 const app = express();
-app.use(cors());
-app.use(express.json());
-
-mongoose.connect(process.env.MONGO_URI)
-    .then(() => console.log("✅ Database Connected"))
-    .catch(err => console.log("❌ DB Error:", err));
-
-// Collection: 'players'
-const Player = mongoose.model('Player', new mongoose.Schema({
-    name: String,
-    wins: { type: Number, default: 0 },
-    points: { type: Number, default: 0 },
-    previousRank: { type: Number, default: 0 }
-}), 'players');
 
 // 1. Bulletproof CORS setup
 app.use(cors({
@@ -25,144 +11,24 @@ app.use(cors({
     methods: ["GET", "POST", "DELETE", "PUT", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"]
 }));
-
-// 2. Explicitly handle OPTIONS requests (Crucial for DELETE)
+app.use(express.json());
 app.options('*', cors()); 
 
-// Change from app.delete to app.post
-app.post('/api/delete-player-safe', async (req, res) => {
-    try {
-        const { name } = req.body; // Get name from the body instead of URL
-        
-        if (!name) return res.status(400).json({ error: "No name provided" });
+mongoose.connect(process.env.MONGO_URI)
+    .then(() => console.log("✅ Database Connected"))
+    .catch(err => console.log("❌ DB Error:", err));
 
-        const result = await Player.findOneAndDelete({ name: name });
-        
-        if (!result) {
-            return res.status(404).json({ error: "Player not found in database" });
-        }
-        
-        res.json({ success: true, message: "Player removed" });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
+// --- SCHEMAS (Defined before Routes) ---
 
-// 1. GET ALL PLAYERS
-app.get('/api/rankings', async (req, res) => {
-    try {
-        const players = await Player.find().sort({ points: -1, wins: -1 });
-        res.json(players);
-    } catch (err) {
-        res.status(500).json({ error: "Could not fetch players" });
-    }
-});
+// Player Schema
+const Player = mongoose.model('Player', new mongoose.Schema({
+    name: String,
+    wins: { type: Number, default: 0 },
+    points: { type: Number, default: 0 },
+    previousRank: { type: Number, default: 0 }
+}), 'players');
 
-// 2. GET NAMES ONLY (For Dashboard)
-app.get('/api/player-list', async (req, res) => {
-    try {
-        const players = await Player.find({}, 'name').sort({ name: 1 });
-        res.json(players);
-    } catch (err) {
-        res.status(500).json({ error: "Could not fetch list" });
-    }
-});
-
-// 3. UPDATE POINTS & SAVE PREVIOUS RANK
-app.post('/api/update-points', async (req, res) => {
-    const { name, result } = req.body;
-    let pGain = (result === 'win') ? 3 : (result === 'draw' ? 1 : 0);
-    let wGain = (result === 'win') ? 1 : 0;
-
-    try {
-        // Step A: Get current list to determine everyone's current rank
-        const currentList = await Player.find().sort({ points: -1, wins: -1 });
-        
-        // Step B: Set everyone's 'previousRank' before we change anything
-        for (let i = 0; i < currentList.length; i++) {
-            await Player.updateOne({ _id: currentList[i]._id }, { $set: { previousRank: i + 1 } });
-        }
-
-        // Step C: Add points to the winner/drawer
-        await Player.updateOne({ name: name }, { $inc: { points: pGain, wins: wGain } });
-
-        res.json({ success: true });
-    } catch (err) {
-        res.status(500).json({ error: "Update failed" });
-    }
-});
-// 1. ADJUST POINTS (Delete/Subtract)
-app.post('/api/adjust-points', async (req, res) => {
-    const { name, wins, points } = req.body;
-    try {
-        // Use negative values to subtract
-        await Player.updateOne(
-            { name: name }, 
-            { $inc: { wins: -wins, points: -points } }
-        );
-        res.json({ success: true, message: "Points adjusted!" });
-    } catch (err) {
-        res.status(500).json({ error: "Adjustment failed" });
-    }
-});
-
-// 2. RESET ALL RANKINGS
-app.post('/api/reset-rankings', async (req, res) => {
-    try {
-        await Player.updateMany({}, { 
-            $set: { wins: 0, points: 0, previousRank: 0 } 
-        });
-        res.json({ success: true, message: "All rankings reset to zero!" });
-    } catch (err) {
-        res.status(500).json({ error: "Reset failed" });
-    }
-});
-// ADD NEW PLAYER TO DATABASE
-app.post('/api/add-player', async (req, res) => {
-    const { name } = req.body;
-    
-    try {
-        // Check if name is provided
-        if (!name) return res.status(400).json({ error: "Name is required" });
-
-        // Check if player already exists
-        const existingPlayer = await Player.findOne({ name: name });
-        if (existingPlayer) {
-            return res.status(400).json({ error: "Player already exists in database!" });
-        }
-
-        // Create new player with default stats
-        const newPlayer = new Player({
-            name: name,
-            wins: 0,
-            points: 0,
-            previousRank: 0
-        });
-
-        await newPlayer.save();
-        res.json({ success: true, message: "New Player Added!" });
-    } catch (err) {
-        res.status(500).json({ error: "Failed to add player" });
-    }
-});
-
-// API: Post Tournament
-app.post('/api/manage-tournament', async (req, res) => {
-    try {
-        const newTour = new Tournament(req.body);
-        await newTour.save();
-        res.json({ success: true });
-    } catch (err) {
-        res.status(500).json({ error: "Failed to save tournament" });
-    }
-});
-
-// API: Get All Tournaments
-app.get('/api/tournaments', async (req, res) => {
-    const tours = await Tournament.find().sort({ _id: -1 });
-    res.json(tours);
-});
-// Add 'joinLink' to your Tournament Schema
+// Tournament Schema
 const Tournament = mongoose.model('Tournament', new mongoose.Schema({
     title: String,
     totalTeams: String,
@@ -170,44 +36,114 @@ const Tournament = mongoose.model('Tournament', new mongoose.Schema({
     winner: { type: String, default: "" },
     fixtureLink: String,
     rosterLink: String,
-    joinLink: String,  // <--- NEW FIELD
+    joinLink: String,
     liveResult: String,
     prize: String,
     date: String
 }), 'tournaments');
 
-// Update the POST route to accept joinLink
+
+// --- PLAYER ROUTES ---
+
+// GET ALL PLAYERS (For Rankings)
+app.get('/api/rankings', async (req, res) => {
+    try {
+        const players = await Player.find().sort({ points: -1, wins: -1 });
+        res.json(players);
+    } catch (err) { res.status(500).json({ error: "Fetch failed" }); }
+});
+
+// GET NAMES ONLY (For Dashboard Dropdown)
+app.get('/api/player-list', async (req, res) => {
+    try {
+        const players = await Player.find({}, 'name').sort({ name: 1 });
+        res.json(players);
+    } catch (err) { res.status(500).json({ error: "Fetch failed" }); }
+});
+
+// ADD NEW PLAYER
+app.post('/api/add-player', async (req, res) => {
+    const { name } = req.body;
+    try {
+        const existing = await Player.findOne({ name });
+        if (existing) return res.status(400).json({ error: "Exists" });
+        const newP = new Player({ name });
+        await newP.save();
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: "Fail" }); }
+});
+
+// UPDATE POINTS
+app.post('/api/update-points', async (req, res) => {
+    const { name, result } = req.body;
+    let pGain = (result === 'win') ? 3 : (result === 'draw' ? 1 : 0);
+    let wGain = (result === 'win') ? 1 : 0;
+    try {
+        const currentList = await Player.find().sort({ points: -1, wins: -1 });
+        for (let i = 0; i < currentList.length; i++) {
+            await Player.updateOne({ _id: currentList[i]._id }, { $set: { previousRank: i + 1 } });
+        }
+        await Player.updateOne({ name }, { $inc: { points: pGain, wins: wGain } });
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: "Fail" }); }
+});
+
+// DELETE PLAYER (Mobile Safe Post)
+app.post('/api/delete-player-safe', async (req, res) => {
+    try {
+        const { name } = req.body;
+        await Player.findOneAndDelete({ name });
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: "Fail" }); }
+});
+
+// ADJUST / RESET ROUTES
+app.post('/api/adjust-points', async (req, res) => {
+    try {
+        await Player.updateOne({ name: req.body.name }, { $inc: { wins: -req.body.wins, points: -req.body.points } });
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: "Fail" }); }
+});
+
+app.post('/api/reset-rankings', async (req, res) => {
+    try {
+        await Player.updateMany({}, { $set: { wins: 0, points: 0, previousRank: 0 } });
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: "Fail" }); }
+});
+
+
+// --- TOURNAMENT ROUTES (Fixed URLs) ---
+
+// 1. SAVE TOURNAMENT (From Dashboard)
 app.post('/api/manage-tournament', async (req, res) => {
     try {
         const newTour = new Tournament(req.body);
         await newTour.save();
         res.json({ success: true });
     } catch (err) {
+        console.log(err);
         res.status(500).json({ error: "Failed to save tournament" });
     }
 });
-// DELETE PLAYER FROM DATABASE
-app.delete('/api/delete-player/:name', async (req, res) => {
-    const playerName = req.params.name;
-    
+
+// 2. GET TOURNAMENTS (For Info Page)
+// Both URLs now point to the same data to prevent errors
+app.get('/api/manage-tournament', async (req, res) => {
     try {
-        const deletedPlayer = await Player.findOneAndDelete({ name: playerName });
-        
-        if (!deletedPlayer) {
-            return res.status(404).json({ error: "Player not found" });
-        }
-
-        // Optional: Recalculate ranks for everyone else after a player is removed
-        const allPlayers = await Player.find().sort({ points: -1, wins: -1 });
-        for (let i = 0; i < allPlayers.length; i++) {
-            await Player.findByIdAndUpdate(allPlayers[i]._id, { previousRank: i + 1 });
-        }
-
-        res.json({ success: true, message: `Player ${playerName} deleted forever.` });
+        const tours = await Tournament.find().sort({ _id: -1 });
+        res.json(tours);
     } catch (err) {
-        res.status(500).json({ error: "Failed to delete player" });
+        res.status(500).json({ error: "Failed to fetch" });
     }
 });
 
+// Fallback route for older code versions
+app.get('/api/tournaments', async (req, res) => {
+    const tours = await Tournament.find().sort({ _id: -1 });
+    res.json(tours);
+});
+
+
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`Server live on ${PORT}`));
+app.listen(PORT, () => console.log(`🚀 Server live on ${PORT}`));
