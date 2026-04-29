@@ -18,6 +18,12 @@ const Player = mongoose.model('Player', new mongoose.Schema({
     points: { type: Number, default: 0 },
     previousRank: { type: Number, default: 0 }
 }), 'players');
+// TOP OF SERVER.JS - Update CORS
+app.use(cors({
+    origin: '*', // Allows all origins
+    methods: ['GET', 'POST', 'DELETE', 'PUT', 'PATCH'], // Explicitly allow DELETE
+    allowedHeaders: ['Content-Type']
+}));
 
 // 1. GET ALL PLAYERS
 app.get('/api/rankings', async (req, res) => {
