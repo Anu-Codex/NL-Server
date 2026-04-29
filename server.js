@@ -145,6 +145,30 @@ app.get('/api/tournaments', async (req, res) => {
     const tours = await Tournament.find().sort({ _id: -1 });
     res.json(tours);
 });
+// Add 'joinLink' to your Tournament Schema
+const Tournament = mongoose.model('Tournament', new mongoose.Schema({
+    title: String,
+    totalTeams: String,
+    status: String,
+    winner: { type: String, default: "" },
+    fixtureLink: String,
+    rosterLink: String,
+    joinLink: String,  // <--- NEW FIELD
+    liveResult: String,
+    prize: String,
+    date: String
+}), 'tournaments');
+
+// Update the POST route to accept joinLink
+app.post('/api/manage-tournament', async (req, res) => {
+    try {
+        const newTour = new Tournament(req.body);
+        await newTour.save();
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: "Failed to save tournament" });
+    }
+});
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server live on ${PORT}`));
