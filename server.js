@@ -138,18 +138,6 @@ app.post('/api/add-player', async (req, res) => {
         res.status(500).json({ error: "Failed to add player" });
     }
 });
-// Updated Tournament Schema
-const Tournament = mongoose.model('Tournament', new mongoose.Schema({
-    title: String,
-    totalTeams: String,
-    status: String, // Upcoming, Live, Ended
-    winner: { type: String, default: "" },
-    fixtureLink: String, // Link to Brackets/Challonge
-    rosterLink: String,  // Link to Roster/Google Sheet
-    liveResult: String,  // Current Match/Score
-    prize: String,
-    date: String
-}), 'tournaments');
 
 // API: Post Tournament
 app.post('/api/manage-tournament', async (req, res) => {
