@@ -83,6 +83,17 @@ app.post('/api/adjust-points', async (req, res) => {
         res.json({ success: true });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
+// RESET ALL RANKINGS TO ZERO
+app.post('/api/reset-rankings', async (req, res) => {
+    try {
+        await Player.updateMany({}, { 
+            $set: { wins: 0, points: 0, previousRank: 0 } 
+        });
+        res.json({ success: true, message: "All rankings reset!" });
+    } catch (err) {
+        res.status(500).json({ error: "Reset failed" });
+    }
+});
 
 // 7. TOURNAMENT ROUTES
 app.get('/api/manage-tournament', async (req, res) => {
