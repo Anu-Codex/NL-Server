@@ -40,6 +40,36 @@ app.delete('/api/tournaments/:id', async (req, res) => {
     await Tournament.findByIdAndDelete(req.params.id);
     res.json({ message: "Deleted" });
 });
+// Endpoint to update player stats
+app.post('/api/update-points', async (req, res) => {
+    const { name, result } = req.body;
+    let pointGain = 0;
+    let winGain = 0;
+
+    if (result === 'win') { pointGain = 3; winGain = 1; }
+    else if (result === 'draw') { pointGain = 1; }
+
+    // 1. Update the player stats
+    await Player.findOneAndUpdate(
+        { name: name },
+        { $inc: { points: pointGain, wins: winGain } }
+    );
+
+    // 2. Logic to update all previousRanks for trend symbols
+    // Fetch all players sorted by points to calculate new ranks
+    const allPlayers = await Player.find().sort({ points: -1 });
+    for (let i = 0; i < allPlayers.length; i++) {
+        await Player.findByIdAndUpdate(allPlayers[i]._id, { previousRank: i + 1 });
+    }
+
+    res.json({ success: true });
+});
+
+// Endpoint to get rankings
+app.get('/api/rankings', async (req, res) => {
+    const players = await Player.find().sort({ points: -1 });
+    res.json(players);
+});
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
