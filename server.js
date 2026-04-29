@@ -1,6 +1,8 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
+const Player = require('./models/Player.js'); // Adjust the path to your file
+
 const bodyParser = require('body-parser');
 require('dotenv').config();
 
