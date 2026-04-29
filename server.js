@@ -12,6 +12,16 @@ app.use(bodyParser.json());
 mongoose.connect(process.env.MONGO_URI)
 .then(() => console.log("Connected to MongoDB"))
 .catch(err => console.log(err));
+mongoose.connect(process.env.MONGO_URI).then(async () => {
+    console.log("Connected!");
+    
+    // This updates all existing players who don't have a 'points' field yet
+    const result = await Player.updateMany(
+        { points: { $exists: false } }, 
+        { $set: { wins: 0, draws: 0, points: 0, previousRank: 0 } }
+    );
+    console.log(`Initialized ${result.modifiedCount} players from auction site.`);
+});
 
 // Tournament Model
 const Tournament = mongoose.model('Tournament', {
