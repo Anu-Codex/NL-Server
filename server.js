@@ -22,21 +22,14 @@ const Player = mongoose.models.Player || mongoose.model('Player', new mongoose.S
     previousRank: { type: Number, default: 0 }
 }), 'players');
 
-// --- UPDATE TOURNAMENT SCHEMA ---
+// --- UPDATE TOURNAMENT SCHEMA in server.js ---
 const Tournament = mongoose.models.Tournament || mongoose.model('Tournament', new mongoose.Schema({
-    title: String,
-    totalTeams: String,
-    status: String,
-    winner: String,
-    fixtureLink: String,
-    rosterLink: String,
-    joinLink: String,
-    prize: String,
-    date: String,
+    title: String, totalTeams: String, status: String, winner: String,
+    fixtureLink: String, rosterLink: String, joinLink: String, prize: String, date: String,
     roster: [{ teamName: String, players: [String] }],
-    // NEW FIELD: Match Data
+    // NEW FLEXIBLE FIXTURE STRUCTURE
     fixtures: [{
-        stageName: String,
+        stageName: String, // e.g., "Group A", "Quarter-Finals"
         matches: [{
             p1: String, p2: String,
             s1: { type: String, default: "-" },
@@ -45,20 +38,23 @@ const Tournament = mongoose.models.Tournament || mongoose.model('Tournament', ne
     }]
 }), 'tournaments');
 
-// --- NEW ROUTE: UPDATE MATCHES ---
-app.post('/api/update-bracket', async (req, res) => {
-    const { tourId, matchData, action, matchId } = req.body;
+// --- NEW ROUTE: MANAGE FIXTURES ---
+app.post('/api/update-fixtures', async (req, res) => {
+    const { tourId, stageName, matchData, action, stageId, matchId } = req.body;
     try {
         const tour = await Tournament.findById(tourId);
-        if (action === 'add') {
-            tour.matches.push(matchData);
+        if (action === 'add-stage') {
+            tour.fixtures.push({ stageName, matches: [] });
+        } else if (action === 'add-match') {
+            const stage = tour.fixtures.id(stageId);
+            stage.matches.push(matchData);
         } else if (action === 'update-score') {
-            const match = tour.matches.id(matchId);
+            const stage = tour.fixtures.id(stageId);
+            const match = stage.matches.id(matchId);
             match.s1 = matchData.s1;
             match.s2 = matchData.s2;
-            match.isLive = matchData.isLive;
-        } else if (action === 'delete') {
-            tour.matches.pull(matchId);
+        } else if (action === 'delete-stage') {
+            tour.fixtures.pull(stageId);
         }
         await tour.save();
         res.json({ success: true });
