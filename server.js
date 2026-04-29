@@ -88,6 +88,34 @@ app.post('/api/reset-rankings', async (req, res) => {
         res.status(500).json({ error: "Reset failed" });
     }
 });
+// ADD NEW PLAYER TO DATABASE
+app.post('/api/add-player', async (req, res) => {
+    const { name } = req.body;
+    
+    try {
+        // Check if name is provided
+        if (!name) return res.status(400).json({ error: "Name is required" });
+
+        // Check if player already exists
+        const existingPlayer = await Player.findOne({ name: name });
+        if (existingPlayer) {
+            return res.status(400).json({ error: "Player already exists in database!" });
+        }
+
+        // Create new player with default stats
+        const newPlayer = new Player({
+            name: name,
+            wins: 0,
+            points: 0,
+            previousRank: 0
+        });
+
+        await newPlayer.save();
+        res.json({ success: true, message: "New Player Added!" });
+    } catch (err) {
+        res.status(500).json({ error: "Failed to add player" });
+    }
+});
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server live on ${PORT}`));
