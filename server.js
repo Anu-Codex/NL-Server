@@ -18,12 +18,30 @@ const Player = mongoose.model('Player', new mongoose.Schema({
     points: { type: Number, default: 0 },
     previousRank: { type: Number, default: 0 }
 }), 'players');
-// TOP OF SERVER.JS - Update CORS
+// server.js
+const cors = require('cors');
+
+// 1. Bulletproof CORS setup
 app.use(cors({
-    origin: '*', // Allows all origins
-    methods: ['GET', 'POST', 'DELETE', 'PUT', 'PATCH'], // Explicitly allow DELETE
-    allowedHeaders: ['Content-Type']
+    origin: "*",
+    methods: ["GET", "POST", "DELETE", "PUT", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"]
 }));
+
+// 2. Explicitly handle OPTIONS requests (Crucial for DELETE)
+app.options('*', cors()); 
+
+// 3. The Delete Route
+app.delete('/api/delete-player/:name', async (req, res) => {
+    try {
+        const playerName = decodeURIComponent(req.params.name);
+        const result = await Player.findOneAndDelete({ name: playerName });
+        if (!result) return res.status(404).json({ error: "Player not found" });
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
 
 // 1. GET ALL PLAYERS
 app.get('/api/rankings', async (req, res) => {
