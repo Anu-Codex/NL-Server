@@ -11,8 +11,18 @@ app.use(express.json());
 
 // 1. Database Connection
 mongoose.connect(process.env.MONGO_URI)
-  .then(() => console.log("Connected to MongoDB Atlas"))
-  .catch(err => console.error("Could not connect to MongoDB:", err));
+  .then(async () => {
+    console.log("✅ Connected to MongoDB");
+
+    // THIS CODE WILL SHOW YOU THE ACTUAL COLLECTIONS IN THE LOGS
+    const collections = await mongoose.connection.db.listCollections().toArray();
+    console.log("Your Collections are:", collections.map(c => c.name));
+
+    // CHECK IF DATA EXISTS
+    const count = await mongoose.connection.db.collection('players').countDocuments();
+    console.log(`There are ${count} players in the 'players' collection.`);
+  })
+  .catch(err => console.error("❌ Connection Error:", err));
 
 // 2. Player Model (Ensure the collection name 'players' matches your auction DB)
 const playerSchema = new mongoose.Schema({
