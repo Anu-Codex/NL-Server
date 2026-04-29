@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 // Replace 'players' with the EXACT name of the collection in your MongoDB auction database
 const playerSchema = new mongoose.Schema({
     name: String,
