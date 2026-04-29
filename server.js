@@ -4,86 +4,115 @@ const cors = require('cors');
 require('dotenv').config();
 
 const app = express();
+
+// 1. FIXED CORS
 app.use(cors());
 app.use(express.json());
 
+// 2. CONNECT TO DATABASE
 mongoose.connect(process.env.MONGO_URI)
     .then(() => console.log("✅ Database Connected"))
-    .catch(err => console.log("❌ DB Error:", err));
+    .catch(err => console.error("❌ DB Connection Error:", err));
 
-// --- SCHEMAS ---
-const Player = mongoose.model('Player', new mongoose.Schema({
+// 3. DEFINE MODELS (Only once!)
+const Player = mongoose.models.Player || mongoose.model('Player', new mongoose.Schema({
     name: String,
     wins: { type: Number, default: 0 },
     points: { type: Number, default: 0 },
     previousRank: { type: Number, default: 0 }
 }), 'players');
 
-const Tournament = mongoose.model('Tournament', new mongoose.Schema({
-    title: String,
-    totalTeams: String,
-    status: String,
-    winner: { type: String, default: "" },
-    fixtureLink: String,
-    rosterLink: String,
-    joinLink: String,
-    liveResult: String,
-    prize: String,
-    date: String
+const Tournament = mongoose.models.Tournament || mongoose.model('Tournament', new mongoose.Schema({
+    title: String, totalTeams: String, status: String, winner: String,
+    fixtureLink: String, rosterLink: String, joinLink: String, prize: String, date: String
 }), 'tournaments');
 
-// --- PLAYER ROUTES ---
+// 4. RANKINGS ROUTE
+app.get('/api/rankings', async (req, res) => {
+    try {
+        const players = await Player.find().sort({ points: -1, wins: -1 });
+        res.json(players);
+    } catch (err) {
+        res.status(500).json({ error: "Failed to fetch rankings" });
+    }
+});
+
+// 5. PLAYER LIST (For Dashboard)
 app.get('/api/player-list', async (req, res) => {
-    const players = await Player.find({}, 'name').sort({ name: 1 });
-    res.json(players);
+    try {
+        const players = await Player.find({}, 'name').sort({ name: 1 });
+        res.json(players);
+    } catch (err) {
+        res.status(500).json({ error: "Failed to fetch list" });
+    }
 });
 
-app.post('/api/add-player', async (req, res) => {
-    const newP = new Player(req.body);
-    await newP.save();
-    res.json({ success: true });
-});
-
+// 6. UPDATE SCORING logic
 app.post('/api/update-points', async (req, res) => {
     const { name, result } = req.body;
     let pGain = (result === 'win') ? 3 : (result === 'draw' ? 1 : 0);
     let wGain = (result === 'win') ? 1 : 0;
-    await Player.updateOne({ name }, { $inc: { points: pGain, wins: wGain } });
-    res.json({ success: true });
+    try {
+        const currentList = await Player.find().sort({ points: -1, wins: -1 });
+        for (let i = 0; i < currentList.length; i++) {
+            await Player.updateOne({ _id: currentList[i]._id }, { $set: { previousRank: i + 1 } });
+        }
+        await Player.updateOne({ name }, { $inc: { points: pGain, wins: wGain } });
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/add-player', async (req, res) => {
+    try {
+        const newP = new Player(req.body);
+        await newP.save();
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.post('/api/delete-player-safe', async (req, res) => {
-    await Player.findOneAndDelete({ name: req.body.name });
-    res.json({ success: true });
+    try {
+        await Player.findOneAndDelete({ name: req.body.name });
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// --- TOURNAMENT ROUTES ---
+app.post('/api/adjust-points', async (req, res) => {
+    try {
+        await Player.updateOne({ name: req.body.name }, { $inc: { wins: -req.body.wins, points: -req.body.points } });
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
 
-// 1. Get all tournaments
+// 7. TOURNAMENT ROUTES
 app.get('/api/manage-tournament', async (req, res) => {
-    const tours = await Tournament.find().sort({ _id: -1 });
-    res.json(tours);
+    try {
+        const tours = await Tournament.find().sort({ _id: -1 });
+        res.json(tours);
+    } catch (err) { res.status(500).json({ error: "Failed" }); }
 });
 
-// 2. Create new tournament
 app.post('/api/manage-tournament', async (req, res) => {
-    const newTour = new Tournament(req.body);
-    await newTour.save();
-    res.json({ success: true });
+    try {
+        const newT = new Tournament(req.body);
+        await newT.save();
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: "Failed" }); }
 });
 
-// 3. Update existing tournament
 app.post('/api/update-tournament', async (req, res) => {
-    const { id, data } = req.body;
-    await Tournament.findByIdAndUpdate(id, data);
-    res.json({ success: true });
+    try {
+        await Tournament.findByIdAndUpdate(req.body.id, req.body.data);
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: "Failed" }); }
 });
 
-// 4. Delete tournament
 app.post('/api/delete-tournament', async (req, res) => {
-    await Tournament.findByIdAndDelete(req.body.id);
-    res.json({ success: true });
+    try {
+        await Tournament.findByIdAndDelete(req.body.id);
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: "Failed" }); }
 });
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`Server live on ${PORT}`));
+app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
