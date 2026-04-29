@@ -3,93 +3,65 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 require('dotenv').config();
 
-const app = express(); // THIS LINE DEFINES 'app' - IT MUST BE HERE
-
-// Middlewares
+const app = express();
 app.use(cors());
 app.use(express.json());
 
-// 1. Database Connection
 mongoose.connect(process.env.MONGO_URI)
-  .then(async () => {
-    console.log("✅ Connected to MongoDB");
+    .then(() => console.log("✅ Database Connected"))
+    .catch(err => console.log("❌ DB Error:", err));
 
-    // THIS CODE WILL SHOW YOU THE ACTUAL COLLECTIONS IN THE LOGS
-    const collections = await mongoose.connection.db.listCollections().toArray();
-    console.log("Your Collections are:", collections.map(c => c.name));
-
-    // CHECK IF DATA EXISTS
-    const count = await mongoose.connection.db.collection('players').countDocuments();
-    console.log(`There are ${count} players in the 'players' collection.`);
-  })
-  .catch(err => console.error("❌ Connection Error:", err));
-
-// 2. Player Model (Ensure the collection name 'players' matches your auction DB)
-const playerSchema = new mongoose.Schema({
-    // If your auction site used 'playerName', change 'name' to 'playerName' below
-    name: { type: String, alias: 'playerName' }, 
+// Collection: 'players'
+const Player = mongoose.model('Player', new mongoose.Schema({
+    name: String,
     wins: { type: Number, default: 0 },
-    draws: { type: Number, default: 0 },
     points: { type: Number, default: 0 },
     previousRank: { type: Number, default: 0 }
-}, { strict: false }); // 'strict: false' allows it to load players even if they don't match the schema perfectly
+}), 'players');
 
-const Player = mongoose.model('Player', playerSchema, 'players'); 
-
-// 3. API ROUTES (Must come AFTER app is defined)
-
-// Get all players for rankings
+// 1. GET ALL PLAYERS
 app.get('/api/rankings', async (req, res) => {
     try {
         const players = await Player.find().sort({ points: -1, wins: -1 });
         res.json(players);
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: "Could not fetch players" });
     }
 });
 
-// Get names for the dashboard dropdown
+// 2. GET NAMES ONLY (For Dashboard)
 app.get('/api/player-list', async (req, res) => {
     try {
-        const players = await Player.find({}, 'name');
+        const players = await Player.find({}, 'name').sort({ name: 1 });
         res.json(players);
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: "Could not fetch list" });
     }
 });
 
-// Update points logic
+// 3. UPDATE POINTS & SAVE PREVIOUS RANK
 app.post('/api/update-points', async (req, res) => {
     const { name, result } = req.body;
-    let pointGain = 0;
-    let winGain = 0;
-
-    if (result === 'win') { pointGain = 3; winGain = 1; }
-    else if (result === 'draw') { pointGain = 1; }
+    let pGain = (result === 'win') ? 3 : (result === 'draw' ? 1 : 0);
+    let wGain = (result === 'win') ? 1 : 0;
 
     try {
-        // STEP 1: Get all players in their CURRENT order (before the update)
-        const currentStandings = await Player.find().sort({ points: -1, wins: -1 });
-
-        // STEP 2: Save their current positions as 'previousRank'
-        for (let i = 0; i < currentStandings.length; i++) {
-            await Player.findByIdAndUpdate(currentStandings[i]._id, { previousRank: i + 1 });
+        // Step A: Get current list to determine everyone's current rank
+        const currentList = await Player.find().sort({ points: -1, wins: -1 });
+        
+        // Step B: Set everyone's 'previousRank' before we change anything
+        for (let i = 0; i < currentList.length; i++) {
+            await Player.updateOne({ _id: currentList[i]._id }, { $set: { previousRank: i + 1 } });
         }
 
-        // STEP 3: Now apply the new points to the specific player
-        await Player.findOneAndUpdate(
-            { name: name }, 
-            { $inc: { points: pointGain, wins: winGain } }
-        );
+        // Step C: Add points to the winner/drawer
+        await Player.updateOne({ name: name }, { $inc: { points: pGain, wins: wGain } });
 
         res.json({ success: true });
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: "Update failed" });
     }
 });
 
-// 4. Start Server
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
-});
+app.listen(PORT, () => console.log(`Server live on ${PORT}`));
