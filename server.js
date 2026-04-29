@@ -62,6 +62,32 @@ app.post('/api/update-points', async (req, res) => {
         res.status(500).json({ error: "Update failed" });
     }
 });
+// 1. ADJUST POINTS (Delete/Subtract)
+app.post('/api/adjust-points', async (req, res) => {
+    const { name, wins, points } = req.body;
+    try {
+        // Use negative values to subtract
+        await Player.updateOne(
+            { name: name }, 
+            { $inc: { wins: -wins, points: -points } }
+        );
+        res.json({ success: true, message: "Points adjusted!" });
+    } catch (err) {
+        res.status(500).json({ error: "Adjustment failed" });
+    }
+});
+
+// 2. RESET ALL RANKINGS
+app.post('/api/reset-rankings', async (req, res) => {
+    try {
+        await Player.updateMany({}, { 
+            $set: { wins: 0, points: 0, previousRank: 0 } 
+        });
+        res.json({ success: true, message: "All rankings reset to zero!" });
+    } catch (err) {
+        res.status(500).json({ error: "Reset failed" });
+    }
+});
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server live on ${PORT}`));
