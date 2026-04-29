@@ -116,6 +116,35 @@ app.post('/api/add-player', async (req, res) => {
         res.status(500).json({ error: "Failed to add player" });
     }
 });
+// Updated Tournament Schema
+const Tournament = mongoose.model('Tournament', new mongoose.Schema({
+    title: String,
+    totalTeams: String,
+    status: String, // Upcoming, Live, Ended
+    winner: { type: String, default: "" },
+    fixtureLink: String, // Link to Brackets/Challonge
+    rosterLink: String,  // Link to Roster/Google Sheet
+    liveResult: String,  // Current Match/Score
+    prize: String,
+    date: String
+}), 'tournaments');
+
+// API: Post Tournament
+app.post('/api/manage-tournament', async (req, res) => {
+    try {
+        const newTour = new Tournament(req.body);
+        await newTour.save();
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: "Failed to save tournament" });
+    }
+});
+
+// API: Get All Tournaments
+app.get('/api/tournaments', async (req, res) => {
+    const tours = await Tournament.find().sort({ _id: -1 });
+    res.json(tours);
+});
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server live on ${PORT}`));
