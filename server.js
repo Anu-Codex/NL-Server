@@ -68,13 +68,20 @@ app.post('/api/update-points', async (req, res) => {
     else if (result === 'draw') { pointGain = 1; }
 
     try {
-        await Player.findOneAndUpdate({ name: name }, { $inc: { points: pointGain, wins: winGain } });
-        
-        // Update ranks for the trend arrows
-        const allPlayers = await Player.find().sort({ points: -1 });
-        for (let i = 0; i < allPlayers.length; i++) {
-            await Player.findByIdAndUpdate(allPlayers[i]._id, { previousRank: i + 1 });
+        // STEP 1: Get all players in their CURRENT order (before the update)
+        const currentStandings = await Player.find().sort({ points: -1, wins: -1 });
+
+        // STEP 2: Save their current positions as 'previousRank'
+        for (let i = 0; i < currentStandings.length; i++) {
+            await Player.findByIdAndUpdate(currentStandings[i]._id, { previousRank: i + 1 });
         }
+
+        // STEP 3: Now apply the new points to the specific player
+        await Player.findOneAndUpdate(
+            { name: name }, 
+            { $inc: { points: pointGain, wins: winGain } }
+        );
+
         res.json({ success: true });
     } catch (err) {
         res.status(500).json({ error: err.message });
