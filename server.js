@@ -29,13 +29,20 @@ app.use(cors({
 // 2. Explicitly handle OPTIONS requests (Crucial for DELETE)
 app.options('*', cors()); 
 
-// 3. The Delete Route
-app.delete('/api/delete-player/:name', async (req, res) => {
+// Change from app.delete to app.post
+app.post('/api/delete-player-safe', async (req, res) => {
     try {
-        const playerName = decodeURIComponent(req.params.name);
-        const result = await Player.findOneAndDelete({ name: playerName });
-        if (!result) return res.status(404).json({ error: "Player not found" });
-        res.json({ success: true });
+        const { name } = req.body; // Get name from the body instead of URL
+        
+        if (!name) return res.status(400).json({ error: "No name provided" });
+
+        const result = await Player.findOneAndDelete({ name: name });
+        
+        if (!result) {
+            return res.status(404).json({ error: "Player not found in database" });
+        }
+        
+        res.json({ success: true, message: "Player removed" });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
