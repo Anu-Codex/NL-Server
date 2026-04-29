@@ -26,12 +26,14 @@ mongoose.connect(process.env.MONGO_URI)
 
 // 2. Player Model (Ensure the collection name 'players' matches your auction DB)
 const playerSchema = new mongoose.Schema({
-    name: String,
+    // If your auction site used 'playerName', change 'name' to 'playerName' below
+    name: { type: String, alias: 'playerName' }, 
     wins: { type: Number, default: 0 },
     draws: { type: Number, default: 0 },
     points: { type: Number, default: 0 },
     previousRank: { type: Number, default: 0 }
-});
+}, { strict: false }); // 'strict: false' allows it to load players even if they don't match the schema perfectly
+
 const Player = mongoose.model('Player', playerSchema, 'players'); 
 
 // 3. API ROUTES (Must come AFTER app is defined)
