@@ -18,8 +18,6 @@ const Player = mongoose.model('Player', new mongoose.Schema({
     points: { type: Number, default: 0 },
     previousRank: { type: Number, default: 0 }
 }), 'players');
-// server.js
-const cors = require('cors');
 
 // 1. Bulletproof CORS setup
 app.use(cors({
