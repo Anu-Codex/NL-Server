@@ -32,6 +32,15 @@ const Tournament = mongoose.models.Tournament || mongoose.model('Tournament', ne
         matches: [{ p1: String, p2: String, s1: { type: String, default: "-" }, s2: { type: String, default: "-" } }]
     }]
 }), 'tournaments');
+// --- STORE MODEL ---
+const StoreItem = mongoose.models.StoreItem || mongoose.model('StoreItem', new mongoose.Schema({
+    name: String,
+    price: String,
+    oldPrice: String, // For discount strike-through
+    image: String,
+    category: String, // "Standard", "Special", "Discount"
+    date: { type: Date, default: Date.now }
+}), 'store');
 
 // --- RANKINGS ROUTE (FIXED TO MATCH DASHBOARD LOGIC) ---
 app.get('/api/rankings', async (req, res) => {
@@ -128,6 +137,25 @@ app.post('/api/announcement', async (req, res) => {
 app.post('/api/clear-announcements', async (req, res) => {
     try {
         await Announcement.deleteMany({});
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// --- STORE ROUTES ---
+app.get('/api/store', async (req, res) => {
+    try {
+        const items = await StoreItem.find().sort({ date: -1 });
+        res.json(items);
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/manage-store', async (req, res) => {
+    try {
+        if (req.body.action === 'add') {
+            await new StoreItem(req.body.data).save();
+        } else if (req.body.action === 'delete') {
+            await StoreItem.findByIdAndDelete(req.body.id);
+        }
         res.json({ success: true });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
