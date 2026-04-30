@@ -18,6 +18,10 @@ const Player = mongoose.models.Player || mongoose.model('Player', new mongoose.S
     points: { type: Number, default: 0 },
     previousRank: { type: Number, default: 0 }
 }), 'players');
+const Announcement = mongoose.models.Announcement || mongoose.model('Announcement', new mongoose.Schema({
+    message: String,
+    date: { type: Date, default: Date.now }
+}), 'announcements');
 
 const Tournament = mongoose.models.Tournament || mongoose.model('Tournament', new mongoose.Schema({
     title: String, totalTeams: String, status: String, winner: String,
@@ -101,6 +105,30 @@ app.post('/api/update-fixtures', async (req, res) => {
         else if (action === 'update-score') { const stage = tour.fixtures.id(stageId); const match = stage.matches.id(matchId); match.s1 = matchData.s1; match.s2 = matchData.s2; }
         else if (action === 'delete-stage') { tour.fixtures.pull(stageId); }
         await tour.save(); res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+// --- ANNOUNCEMENT ROUTES (Updated for History) ---
+app.get('/api/announcement', async (req, res) => {
+    try {
+        // Fetch all messages, newest first
+        const data = await Announcement.find().sort({ date: -1 });
+        res.json(data);
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/announcement', async (req, res) => {
+    try {
+        // Just save the new message (Don't delete old ones)
+        await new Announcement({ message: req.body.message }).save();
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Add this to allow Admin to clear history if it gets too long
+app.post('/api/clear-announcements', async (req, res) => {
+    try {
+        await Announcement.deleteMany({});
+        res.json({ success: true });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
