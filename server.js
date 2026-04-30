@@ -41,6 +41,11 @@ const StoreItem = mongoose.models.StoreItem || mongoose.model('StoreItem', new m
     category: String, // "Standard", "Special", "Discount"
     date: { type: Date, default: Date.now }
 }), 'store');
+// --- NEWSLETTER MODEL ---
+const Subscriber = mongoose.models.Subscriber || mongoose.model('Subscriber', new mongoose.Schema({
+    email: { type: String, unique: true, required: true },
+    date: { type: Date, default: Date.now }
+}), 'subscribers');
 
 // --- RANKINGS ROUTE (FIXED TO MATCH DASHBOARD LOGIC) ---
 app.get('/api/rankings', async (req, res) => {
@@ -182,6 +187,31 @@ app.get('/api/arena-results', async (req, res) => {
 
         // Sort by ID descending (newest first)
         res.json(allMatches.reverse());
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+// --- NEWSLETTER ROUTE ---
+app.post('/api/subscribe', async (req, res) => {
+    try {
+        const { email } = req.body;
+        if (!email) return res.status(400).json({ error: "Email required" });
+        
+        const newSub = new Subscriber({ email });
+        await newSub.save();
+        res.json({ success: true, message: "Welcome to the elite!" });
+    } catch (err) {
+        if (err.code === 11000) {
+            res.status(400).json({ error: "You are already a member!" });
+        } else {
+            res.status(500).json({ error: "Server error" });
+        }
+    }
+});
+
+// GET Subscribers (for Admin)
+app.get('/api/subscribers', async (req, res) => {
+    try {
+        const list = await Subscriber.find().sort({ date: -1 });
+        res.json(list);
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
