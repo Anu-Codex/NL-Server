@@ -159,5 +159,30 @@ app.post('/api/manage-store', async (req, res) => {
         res.json({ success: true });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
+// --- NEW ROUTE: FETCH ALL ARENA MATCHES ---
+app.get('/api/arena-results', async (req, res) => {
+    try {
+        const tournaments = await Tournament.find().sort({ _id: -1 });
+        let allMatches = [];
+
+        tournaments.forEach(tour => {
+            if (tour.fixtures) {
+                tour.fixtures.forEach(stage => {
+                    stage.matches.forEach(match => {
+                        allMatches.push({
+                            ...match.toObject(),
+                            tournamentTitle: tour.title,
+                            stageName: stage.stageName,
+                            tourStatus: tour.status
+                        });
+                    });
+                });
+            }
+        });
+
+        // Sort by ID descending (newest first)
+        res.json(allMatches.reverse());
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
 
 app.listen(process.env.PORT || 5000, () => console.log("🚀 Server Running"));
