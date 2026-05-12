@@ -290,6 +290,32 @@ app.get('/api/subscribers', async (req, res) => {
         res.json(list);
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
+// --- NEW ROUTE: EDIT TEAM NAME (BULK UPDATE) ---
+app.post('/api/edit-team-name', async (req, res) => {
+    const { tourId, oldName, newName } = req.body;
+    try {
+        const tour = await Tournament.findById(tourId);
+        
+        // 1. Update in Roster
+        const rosterTeam = tour.roster.find(t => t.teamName === oldName);
+        if (rosterTeam) {
+            rosterTeam.teamName = newName;
+        }
+
+        // 2. Update in all Fixtures (Matches)
+        if (tour.fixtures) {
+            tour.fixtures.forEach(stage => {
+                stage.matches.forEach(match => {
+                    if (match.p1 === oldName) match.p1 = newName;
+                    if (match.p2 === oldName) match.p2 = newName;
+                });
+            });
+        }
+
+        await tour.save();
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
 
 // 4. START SERVER
 const PORT = process.env.PORT || 5000;
