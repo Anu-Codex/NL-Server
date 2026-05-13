@@ -63,6 +63,7 @@ const Tournament = mongoose.models.Tournament || mongoose.model('Tournament', ne
             evidence: { type: String, default: "" }
         }]
     }]
+    pendingApplicants: [{ name: String, whatsapp: String, date: { type: Date, default: Date.now } }]
 }), 'tournaments');
 // --- PREDICTION MODEL ---
 const Prediction = mongoose.models.Prediction || mongoose.model('Prediction', new mongoose.Schema({
@@ -471,6 +472,46 @@ app.post('/api/manage-agents', async (req, res) => {
         if (action === 'add') await new FreeAgent(data).save();
         if (action === 'sign') await FreeAgent.findByIdAndUpdate(id, { status: "Signed" });
         if (action === 'delete') await FreeAgent.findByIdAndDelete(id);
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+// --- TOURNAMENT APPLICATION ROUTES ---
+
+// 1. Submit Application (User)
+app.post('/api/apply-tournament', async (req, res) => {
+    const { tourId, name, whatsapp } = req.body;
+    try {
+        const tour = await Tournament.findById(tourId);
+        // Check if already applied
+        const exists = tour.pendingApplicants.find(a => a.whatsapp === whatsapp);
+        if (exists) return res.status(400).json({ error: "Already applied!" });
+
+        tour.pendingApplicants.push({ name, whatsapp });
+        await tour.save();
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// 2. Approve/Reject Application (Admin)
+app.post('/api/manage-applications', async (req, res) => {
+    const { tourId, appId, action, teamName, groupName } = req.body;
+    try {
+        const tour = await Tournament.findById(tourId);
+        const applicant = tour.pendingApplicants.id(appId);
+
+        if (action === 'approve') {
+            // Add to Roster automatically
+            let team = tour.roster.find(t => t.teamName === teamName);
+            if (team) {
+                team.players.push(applicant.name);
+            } else {
+                tour.roster.push({ teamName, players: [applicant.name], groupName });
+            }
+        }
+        
+        // Remove from pending in both cases (Approve or Reject)
+        tour.pendingApplicants.pull(appId);
+        await tour.save();
         res.json({ success: true });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
