@@ -445,37 +445,52 @@ app.post('/api/update-profile', async (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// --- PREDICTION ROUTES ---
 app.get('/api/predictions', async (req, res) => {
-    try { res.json(await Prediction.find({ status: "Available" })); } 
-    catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-// --- FIX: OPEN PREDICTION WITH MULTIPLIERS ---
-app.post('/api/predictions/open', async (req, res) => {
     try {
-        const { matchId } = req.body;
-        // 1. Remove any existing prediction for this specific match
-        await Prediction.deleteMany({ matchId }); 
-        
-        // 2. Save the new prediction including the Odds (Multipliers)
-        const newPred = new Prediction(req.body); 
-        await newPred.save();
-        
-        res.json({ success: true });
+        // This query finds EVERYTHING that is not "Settled"
+        // This will bring back all your "vanished" matches immediately
+        const data = await Prediction.find({ status: { $ne: "Settled" } });
+        res.json(data);
     } catch (err) { 
-        console.error("Open Pred Error:", err);
-        res.status(500).json({ error: err.message }); 
+        res.status(500).json({ error: "Recovery Failed" }); 
     }
 });
 
-app.post('/api/predictions/vote', async (req, res) => {
-    const { predId, pick } = req.body; // pick: 'p1', 'draw', or 'p2'
+// --- FIX 2: NO DELETION (UPSERT LOGIC) ---
+app.post('/api/predictions/open', async (req, res) => {
+    const { matchId, p1, p2, tourId, oddsP1, oddsDraw, oddsP2 } = req.body;
     try {
-        const field = pick === 'p1' ? 'votesP1' : (pick === 'draw' ? 'votesDraw' : 'votesP2');
-        await Prediction.findByIdAndUpdate(predId, { $inc: { [field]: 1 } });
+        // Instead of deleteMany, we use findOneAndUpdate with "upsert: true"
+        // This updates the match if it exists, or creates it if it's missing.
+        // NO DATA LOSS.
+        await Prediction.findOneAndUpdate(
+            { matchId: matchId },
+            { 
+                tourId, p1, p2, oddsP1, oddsDraw, oddsP2, 
+                status: "Available" // Force it back to visible
+            },
+            { upsert: true, new: true }
+        );
         res.json({ success: true });
-    } catch (err) { res.status(500).json({ error: err.message }); }
+    } catch (e) { res.status(500).json({ error: "Failed to open" }); }
+});
+
+// --- FIX 3: GLOBAL SETTLE ---
+app.post('/api/bets/settle', async (req, res) => {
+    const { matchId, result } = req.body;
+    try {
+        const winners = await Bet.find({ matchId, pick: result, status: "Pending" });
+        for (let bet of winners) {
+            const payout = bet.slips * 100 * bet.multiplier;
+            await User.findByIdAndUpdate(bet.userId, { $inc: { balance: payout } });
+            bet.status = "Won"; await bet.save();
+        }
+        await Bet.updateMany({ matchId, status: "Pending" }, { status: "Lost" });
+        
+        // IMPORTANT: Only when you click "WON", it becomes "Settled" and hides from page
+        await Prediction.findOneAndUpdate({ matchId }, { status: "Settled" });
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: "Settle Error" }); }
 });
 
 // --- FREE AGENT ROUTES ---
@@ -550,33 +565,7 @@ app.post('/api/auth/login', async (req, res) => {
 });
 
 // --- BETTING ROUTES ---
-// --- FIX: SETTLING BETS (PAYOUTS) ---
-app.post('/api/bets/settle', async (req, res) => {
-    const { matchId, result } = req.body; // result: 'p1', 'draw', or 'p2'
-    try {
-        // 1. Find all users who bet on the correct outcome
-        const winningBets = await Bet.find({ matchId, pick: result, status: "Pending" });
 
-        for (let bet of winningBets) {
-            const payout = bet.slips * 100 * bet.multiplier;
-            // Add the won ₦ back to user balance
-            await User.findByIdAndUpdate(bet.userId, { $inc: { balance: payout } });
-            
-            bet.status = "Won";
-            await bet.save();
-        }
-
-        // 2. Mark losing bets as "Lost"
-        await Bet.updateMany({ matchId, pick: { $ne: result }, status: "Pending" }, { status: "Lost" });
-        
-        // 3. Close the prediction board for this match
-        await Prediction.findOneAndUpdate({ matchId }, { status: "Closed" });
-
-        res.json({ success: true });
-    } catch (e) { 
-        res.status(500).json({ error: "Settle operation failed" }); 
-    }
-});
 
 // --- NEW ROUTE: TOGGLE MATCH STATUS (Admin) ---
 app.post('/api/predictions/toggle-status', async (req, res) => {
