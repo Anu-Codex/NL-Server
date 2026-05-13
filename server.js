@@ -451,15 +451,22 @@ app.get('/api/predictions', async (req, res) => {
     catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// --- FIX: OPEN PREDICTION WITH MULTIPLIERS ---
 app.post('/api/predictions/open', async (req, res) => {
     try {
-        const { tourId, matchId, p1, p2 } = req.body;
-        // Prevent duplicate prediction for same match
+        const { matchId } = req.body;
+        // 1. Remove any existing prediction for this specific match
         await Prediction.deleteMany({ matchId }); 
-        const newPred = new Prediction({ tourId, matchId, p1, p2 });
+        
+        // 2. Save the new prediction including the Odds (Multipliers)
+        const newPred = new Prediction(req.body); 
         await newPred.save();
+        
         res.json({ success: true });
-    } catch (err) { res.status(500).json({ error: err.message }); }
+    } catch (err) { 
+        console.error("Open Pred Error:", err);
+        res.status(500).json({ error: err.message }); 
+    }
 });
 
 app.post('/api/predictions/vote', async (req, res) => {
@@ -543,35 +550,64 @@ app.post('/api/auth/login', async (req, res) => {
 });
 
 // --- BETTING ROUTES ---
+// --- FIX: PLACING A BET ---
 app.post('/api/bets/place', async (req, res) => {
     const { userId, matchId, pick, slips, multiplier } = req.body;
-    const cost = slips * 100;
+    const cost = slips * 100; // Each slip is 100 ₦
     try {
         const user = await User.findById(userId);
-        if (user.balance < cost) return res.status(400).json({ error: "Insufficient ₦ Credits" });
+        if (!user) return res.status(404).json({ error: "User not found" });
 
+        if (user.balance < cost) {
+            return res.status(400).json({ error: "Insufficient ₦ Credits. You need at least 100 ₦" });
+        }
+
+        // Deduct ₦ and save
         user.balance -= cost;
         await user.save();
-        await new Bet({ userId, username: user.username, matchId, pick, slips, multiplier }).save();
+
+        // Create the bet record
+        await new Bet({ 
+            userId, 
+            username: user.username, 
+            matchId, 
+            pick, 
+            slips, 
+            multiplier 
+        }).save();
+
         res.json({ success: true, newBalance: user.balance });
-    } catch (e) { res.status(500).json({ error: e.message }); }
+    } catch (e) { 
+        res.status(500).json({ error: "Database error during betting" }); 
+    }
 });
 
-// Admin Settle Bet
+// --- FIX: SETTLING BETS (PAYOUTS) ---
 app.post('/api/bets/settle', async (req, res) => {
     const { matchId, result } = req.body; // result: 'p1', 'draw', or 'p2'
     try {
+        // 1. Find all users who bet on the correct outcome
         const winningBets = await Bet.find({ matchId, pick: result, status: "Pending" });
+
         for (let bet of winningBets) {
             const payout = bet.slips * 100 * bet.multiplier;
+            // Add the won ₦ back to user balance
             await User.findByIdAndUpdate(bet.userId, { $inc: { balance: payout } });
+            
             bet.status = "Won";
             await bet.save();
         }
-        await Bet.updateMany({ matchId, pick: { $ne: result } }, { status: "Lost" });
+
+        // 2. Mark losing bets as "Lost"
+        await Bet.updateMany({ matchId, pick: { $ne: result }, status: "Pending" }, { status: "Lost" });
+        
+        // 3. Close the prediction board for this match
         await Prediction.findOneAndUpdate({ matchId }, { status: "Closed" });
+
         res.json({ success: true });
-    } catch (e) { res.status(500).json({ error: e.message }); }
+    } catch (e) { 
+        res.status(500).json({ error: "Settle operation failed" }); 
+    }
 });
 
 
