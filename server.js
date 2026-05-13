@@ -62,7 +62,7 @@ const Tournament = mongoose.models.Tournament || mongoose.model('Tournament', ne
             s2: { type: String, default: "-" },
             evidence: { type: String, default: "" }
         }]
-    }]
+    }],
     pendingApplicants: [{ name: String, whatsapp: String, date: { type: Date, default: Date.now } }]
 }), 'tournaments');
 // --- PREDICTION MODEL ---
