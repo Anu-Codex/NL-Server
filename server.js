@@ -65,16 +65,27 @@ const Tournament = mongoose.models.Tournament || mongoose.model('Tournament', ne
     }],
     pendingApplicants: [{ name: String, whatsapp: String, date: { type: Date, default: Date.now } }]
 }), 'tournaments');
-// --- PREDICTION MODEL ---
+const User = mongoose.models.User || mongoose.model('User', new mongoose.Schema({
+    username: { type: String, unique: true, required: true },
+    password: { type: String, required: true }, // In production, use bcrypt to hash
+    balance: { type: Number, default: 10000 },
+    verified: { type: Boolean, default: false }
+}), 'users');
+
+const Bet = mongoose.models.Bet || mongoose.model('Bet', new mongoose.Schema({
+    userId: String, username: String, matchId: String, pick: String,
+    slips: { type: Number, default: 1 }, multiplier: Number, status: { type: String, default: "Pending" }
+}), 'bets');
+
+// --- UPDATE PREDICTION SCHEMA ---
 const Prediction = mongoose.models.Prediction || mongoose.model('Prediction', new mongoose.Schema({
-    tourId: String,
-    matchId: String,
-    p1: String, p2: String,
-    votesP1: { type: Number, default: 0 },
-    votesDraw: { type: Number, default: 0 },
-    votesP2: { type: Number, default: 0 },
-    status: { type: String, default: "Open" } // Open or Closed
+    tourId: String, matchId: String, p1: String, p2: String,
+    oddsP1: { type: Number, default: 2.0 }, // Multipliers
+    oddsDraw: { type: Number, default: 3.0 },
+    oddsP2: { type: Number, default: 2.0 },
+    status: { type: String, default: "Open" }
 }), 'predictions');
+
 // --- FREE AGENT MODEL ---
 const FreeAgent = mongoose.models.FreeAgent || mongoose.model('FreeAgent', new mongoose.Schema({
     name: String, division: String, playstyle: String, basePrice: String, whatsapp: String,
@@ -514,6 +525,53 @@ app.post('/api/manage-applications', async (req, res) => {
         await tour.save();
         res.json({ success: true });
     } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// --- NEW AUTH ROUTES ---
+app.post('/api/auth/signup', async (req, res) => {
+    try {
+        const user = new User(req.body);
+        await user.save();
+        res.json({ success: true, user });
+    } catch (e) { res.status(400).json({ error: "Username taken" }); }
+});
+
+app.post('/api/auth/login', async (req, res) => {
+    const user = await User.findOne(req.body);
+    if (user) res.json({ success: true, user });
+    else res.status(401).json({ error: "Invalid credentials" });
+});
+
+// --- BETTING ROUTES ---
+app.post('/api/bets/place', async (req, res) => {
+    const { userId, matchId, pick, slips, multiplier } = req.body;
+    const cost = slips * 100;
+    try {
+        const user = await User.findById(userId);
+        if (user.balance < cost) return res.status(400).json({ error: "Insufficient ₦ Credits" });
+
+        user.balance -= cost;
+        await user.save();
+        await new Bet({ userId, username: user.username, matchId, pick, slips, multiplier }).save();
+        res.json({ success: true, newBalance: user.balance });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Admin Settle Bet
+app.post('/api/bets/settle', async (req, res) => {
+    const { matchId, result } = req.body; // result: 'p1', 'draw', or 'p2'
+    try {
+        const winningBets = await Bet.find({ matchId, pick: result, status: "Pending" });
+        for (let bet of winningBets) {
+            const payout = bet.slips * 100 * bet.multiplier;
+            await User.findByIdAndUpdate(bet.userId, { $inc: { balance: payout } });
+            bet.status = "Won";
+            await bet.save();
+        }
+        await Bet.updateMany({ matchId, pick: { $ne: result } }, { status: "Lost" });
+        await Prediction.findOneAndUpdate({ matchId }, { status: "Closed" });
+        res.json({ success: true });
+    } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 
