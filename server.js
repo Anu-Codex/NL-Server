@@ -316,6 +316,51 @@ app.post('/api/edit-team-name', async (req, res) => {
         res.json({ success: true });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
+// --- NEW ROUTE: EDIT PLAYER NAME (CROSS-DATABASE UPDATE) ---
+app.post('/api/edit-player-name', async (req, res) => {
+    const { tourId, oldName, newName } = req.body;
+    try {
+        // 1. Update Global Player Collection (Rankings)
+        await Player.updateOne({ name: oldName }, { $set: { name: newName } });
+
+        // 2. Update specific Tournament Data
+        const tour = await Tournament.findById(tourId);
+        if (tour) {
+            // Update Roster
+            tour.roster.forEach(team => {
+                team.players = team.players.map(p => p === oldName ? newName : p);
+            });
+            // Update Fixtures/Brackets
+            if (tour.fixtures) {
+                tour.fixtures.forEach(stage => {
+                    stage.matches.forEach(match => {
+                        if (match.p1 === oldName) match.p1 = newName;
+                        if (match.p2 === oldName) match.p2 = newName;
+                    });
+                });
+            }
+            await tour.save();
+        }
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+// --- NEW ROUTE: REMOVE SPECIFIC PLAYER FROM A TEAM ROSTER ---
+app.post('/api/remove-player-roster', async (req, res) => {
+    const { tourId, teamId, playerName } = req.body;
+    try {
+        const tour = await Tournament.findById(tourId);
+        if (tour) {
+            const team = tour.roster.id(teamId);
+            if (team) {
+                // Filter out the specific player name
+                team.players = team.players.filter(p => p !== playerName);
+                await tour.save();
+            }
+        }
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 
 // 4. START SERVER
 const PORT = process.env.PORT || 5000;
