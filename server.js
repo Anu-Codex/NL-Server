@@ -76,14 +76,9 @@ const Prediction = mongoose.models.Prediction || mongoose.model('Prediction', ne
 }), 'predictions');
 // --- FREE AGENT MODEL ---
 const FreeAgent = mongoose.models.FreeAgent || mongoose.model('FreeAgent', new mongoose.Schema({
-    name: String,
-    division: String, // e.g., Div 1, Div 2
-    playstyle: String,
-    basePrice: String,
-    whatsapp: String,
-    status: { type: String, default: "Available" }, // Available or Signed
-    date: { type: Date, default: Date.now }
-}), 'freeagents');
+    name: String, division: String, playstyle: String, basePrice: String, whatsapp: String,
+    status: { type: String, default: "Available" }, date: { type: Date, default: Date.now }
+}));
 
 // Store Model
 const StoreItem = mongoose.models.StoreItem || mongoose.model('StoreItem', new mongoose.Schema({
