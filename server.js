@@ -54,7 +54,8 @@ const Tournament = mongoose.models.Tournament || mongoose.model('Tournament', ne
             p1: String, 
             p2: String, 
             s1: { type: String, default: "-" }, 
-            s2: { type: String, default: "-" } 
+            s2: { type: String, default: "-" },
+            evidence: { type: String, default: "" }
         }]
     }]
 }), 'tournaments');
@@ -373,6 +374,22 @@ app.post('/api/remove-player-roster', async (req, res) => {
                 await tour.save();
             }
         }
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+// --- UPDATE TOURNAMENT SCHEMA in server.js ---
+// Find the matches array inside fixtures and add: evidence: { type: String, default: "" }
+
+// --- NEW ROUTE: SAVE MATCH EVIDENCE ---
+app.post('/api/save-evidence', async (req, res) => {
+    const { tourId, stageId, matchId, evidenceUrl } = req.body;
+    try {
+        const tour = await Tournament.findById(tourId);
+        const stage = tour.fixtures.id(stageId);
+        const match = stage.matches.id(matchId);
+        
+        match.evidence = evidenceUrl; // Save the ImgBB link
+        await tour.save();
         res.json({ success: true });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
