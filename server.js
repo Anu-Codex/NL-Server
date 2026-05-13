@@ -22,8 +22,13 @@ const Player = mongoose.models.Player || mongoose.model('Player', new mongoose.S
     previousRank: { type: Number, default: 0 },
     goalsFor: { type: Number, default: 0 },      // GS
     goalsAgainst: { type: Number, default: 0 },  // GA
-    trophies: { type: String, default: "" }      // Performance
-}), 'players');
+    trophies: { type: String, default: "" },
+    playstyle: { type: String, default: "Balanced" },
+    formation: { type: String, default: "4-3-3" },
+    signaturePlayer: { type: String, default: "Standard" },
+    avatar: { type: String, default: "" }
+}), 'players'); // Performance
+
 
 // Announcement Model
 const Announcement = mongoose.models.Announcement || mongoose.model('Announcement', new mongoose.Schema({
@@ -403,6 +408,12 @@ app.post('/api/delete-evidence', async (req, res) => {
         
         match.evidence = ""; // Clear the link
         await tour.save();
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+app.post('/api/update-profile', async (req, res) => {
+    try {
+        await Player.updateOne({ name: req.body.name }, { $set: req.body.data });
         res.json({ success: true });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
