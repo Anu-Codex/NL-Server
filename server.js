@@ -587,30 +587,43 @@ app.post('/api/predictions/toggle-status', async (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// --- NEW ROUTE: WITHDRAW BET (User) ---
+// --- FIXED WITHDRAW ROUTE ---
 app.post('/api/bets/withdraw', async (req, res) => {
     const { userId, matchId } = req.body;
     try {
-        // 1. Check if betting is still "Available"
+        // 1. Find the prediction to check if betting is still open
         const pred = await Prediction.findOne({ matchId });
-        if (pred.status !== "Available") return res.status(403).json({ error: "Betting is LOCKED for this match!" });
+        
+        // Safety: If Admin closed it, no refund allowed (prevents cheating during match)
+        if (!pred || pred.status !== "Available") {
+            return res.status(403).json({ error: "Betting is LOCKED. Cannot withdraw now." });
+        }
 
-        // 2. Find all bets for this user on this match
+        // 2. Find all pending bets for THIS user on THIS match
         const userBets = await Bet.find({ userId, matchId, status: "Pending" });
-        if (userBets.length === 0) return res.status(404).json({ error: "No bets found" });
 
-        // 3. Calculate refund (Slips * 100)
-        let totalRefund = 0;
-        userBets.forEach(b => totalRefund += (b.slips * 100));
+        if (userBets.length === 0) {
+            return res.status(404).json({ error: "No active bets found to withdraw." });
+        }
 
-        // 4. Return money to user and delete the bets
+        // 3. Calculate total refund (Slips * 100₦)
+        const totalRefund = userBets.reduce((sum, bet) => sum + (bet.slips * 100), 0);
+
+        // 4. Update user balance in DB
         const user = await User.findById(userId);
+        if (!user) return res.status(404).json({ error: "User not found" });
+        
         user.balance += totalRefund;
         await user.save();
+
+        // 5. Delete the bets from DB so they don't count for payouts later
         await Bet.deleteMany({ userId, matchId, status: "Pending" });
 
         res.json({ success: true, newBalance: user.balance });
-    } catch (err) { res.status(500).json({ error: err.message }); }
+    } catch (err) {
+        console.error("Withdraw Error:", err);
+        res.status(500).json({ error: "Internal Server Error" });
+    }
 });
 app.get('/api/user-bets-all/:userId', async (req, res) => {
     const bets = await Bet.find({ userId: req.params.userId, status: "Pending" });
