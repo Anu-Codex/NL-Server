@@ -83,7 +83,7 @@ const Prediction = mongoose.models.Prediction || mongoose.model('Prediction', ne
     oddsP1: { type: Number, default: 2.0 }, // Multipliers
     oddsDraw: { type: Number, default: 3.0 },
     oddsP2: { type: Number, default: 2.0 },
-    status: { type: String, default: "Open" }
+    status: { type: String, default: "Available" }
 }), 'predictions');
 
 // --- FREE AGENT MODEL ---
