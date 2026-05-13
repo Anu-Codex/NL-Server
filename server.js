@@ -290,19 +290,19 @@ app.get('/api/subscribers', async (req, res) => {
         res.json(list);
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
-// --- NEW ROUTE: EDIT TEAM NAME (BULK UPDATE) ---
+// --- 1. GLOBAL RENAME: Updates Roster AND all Fixtures at once ---
 app.post('/api/edit-team-name', async (req, res) => {
     const { tourId, oldName, newName } = req.body;
     try {
         const tour = await Tournament.findById(tourId);
-        
-        // 1. Update in Roster
-        const rosterTeam = tour.roster.find(t => t.teamName === oldName);
-        if (rosterTeam) {
-            rosterTeam.teamName = newName;
-        }
+        if (!tour) return res.status(404).json({ error: "Tournament not found" });
 
-        // 2. Update in all Fixtures (Matches)
+        // Update in Roster
+        tour.roster.forEach(t => {
+            if (t.teamName === oldName) t.teamName = newName;
+        });
+
+        // Update in ALL Fixtures/Matches (Fixes your "Old name showing" issue)
         if (tour.fixtures) {
             tour.fixtures.forEach(stage => {
                 stage.matches.forEach(match => {
@@ -311,6 +311,22 @@ app.post('/api/edit-team-name', async (req, res) => {
                 });
             });
         }
+
+        await tour.save();
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// --- 2. MATCH SPECIFIC EDIT: Updates a player name in just one specific match ---
+app.post('/api/edit-match-player', async (req, res) => {
+    const { tourId, stageId, matchId, p1, p2 } = req.body;
+    try {
+        const tour = await Tournament.findById(tourId);
+        const stage = tour.fixtures.id(stageId);
+        const match = stage.matches.id(matchId);
+        
+        if (p1) match.p1 = p1;
+        if (p2) match.p2 = p2;
 
         await tour.save();
         res.json({ success: true });
