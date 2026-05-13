@@ -64,6 +64,16 @@ const Tournament = mongoose.models.Tournament || mongoose.model('Tournament', ne
         }]
     }]
 }), 'tournaments');
+// --- PREDICTION MODEL ---
+const Prediction = mongoose.models.Prediction || mongoose.model('Prediction', new mongoose.Schema({
+    tourId: String,
+    matchId: String,
+    p1: String, p2: String,
+    votesP1: { type: Number, default: 0 },
+    votesDraw: { type: Number, default: 0 },
+    votesP2: { type: Number, default: 0 },
+    status: { type: String, default: "Open" } // Open or Closed
+}), 'predictions');
 
 // Store Model
 const StoreItem = mongoose.models.StoreItem || mongoose.model('StoreItem', new mongoose.Schema({
@@ -414,6 +424,32 @@ app.post('/api/delete-evidence', async (req, res) => {
 app.post('/api/update-profile', async (req, res) => {
     try {
         await Player.updateOne({ name: req.body.name }, { $set: req.body.data });
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// --- PREDICTION ROUTES ---
+app.get('/api/predictions', async (req, res) => {
+    try { res.json(await Prediction.find({ status: "Open" })); } 
+    catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/predictions/open', async (req, res) => {
+    try {
+        const { tourId, matchId, p1, p2 } = req.body;
+        // Prevent duplicate prediction for same match
+        await Prediction.deleteMany({ matchId }); 
+        const newPred = new Prediction({ tourId, matchId, p1, p2 });
+        await newPred.save();
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/predictions/vote', async (req, res) => {
+    const { predId, pick } = req.body; // pick: 'p1', 'draw', or 'p2'
+    try {
+        const field = pick === 'p1' ? 'votesP1' : (pick === 'draw' ? 'votesDraw' : 'votesP2');
+        await Prediction.findByIdAndUpdate(predId, { $inc: { [field]: 1 } });
         res.json({ success: true });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
