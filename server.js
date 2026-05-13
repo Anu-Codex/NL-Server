@@ -612,6 +612,10 @@ app.post('/api/bets/withdraw', async (req, res) => {
         res.json({ success: true, newBalance: user.balance });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
+app.get('/api/user-bets-all/:userId', async (req, res) => {
+    const bets = await Bet.find({ userId: req.params.userId, status: "Pending" });
+    res.json(bets);
+});
 
 // --- UPDATE BET PLACING ROUTE (Check Status) ---
 app.post('/api/bets/place', async (req, res) => {
