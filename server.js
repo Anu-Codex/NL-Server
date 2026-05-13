@@ -74,6 +74,16 @@ const Prediction = mongoose.models.Prediction || mongoose.model('Prediction', ne
     votesP2: { type: Number, default: 0 },
     status: { type: String, default: "Open" } // Open or Closed
 }), 'predictions');
+// --- FREE AGENT MODEL ---
+const FreeAgent = mongoose.models.FreeAgent || mongoose.model('FreeAgent', new mongoose.Schema({
+    name: String,
+    division: String, // e.g., Div 1, Div 2
+    playstyle: String,
+    basePrice: String,
+    whatsapp: String,
+    status: { type: String, default: "Available" }, // Available or Signed
+    date: { type: Date, default: Date.now }
+}), 'freeagents');
 
 // Store Model
 const StoreItem = mongoose.models.StoreItem || mongoose.model('StoreItem', new mongoose.Schema({
@@ -450,6 +460,22 @@ app.post('/api/predictions/vote', async (req, res) => {
     try {
         const field = pick === 'p1' ? 'votesP1' : (pick === 'draw' ? 'votesDraw' : 'votesP2');
         await Prediction.findByIdAndUpdate(predId, { $inc: { [field]: 1 } });
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// --- FREE AGENT ROUTES ---
+app.get('/api/free-agents', async (req, res) => {
+    try { res.json(await FreeAgent.find().sort({ date: -1 })); } 
+    catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/manage-agents', async (req, res) => {
+    const { action, data, id } = req.body;
+    try {
+        if (action === 'add') await new FreeAgent(data).save();
+        if (action === 'sign') await FreeAgent.findByIdAndUpdate(id, { status: "Signed" });
+        if (action === 'delete') await FreeAgent.findByIdAndDelete(id);
         res.json({ success: true });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
