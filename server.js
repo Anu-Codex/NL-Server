@@ -447,7 +447,7 @@ app.post('/api/update-profile', async (req, res) => {
 
 // --- PREDICTION ROUTES ---
 app.get('/api/predictions', async (req, res) => {
-    try { res.json(await Prediction.find({ status: "Open" })); } 
+    try { res.json(await Prediction.find({ status: "Available" })); } 
     catch (err) { res.status(500).json({ error: err.message }); }
 });
 
