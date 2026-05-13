@@ -393,6 +393,19 @@ app.post('/api/save-evidence', async (req, res) => {
         res.json({ success: true });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
+// --- NEW ROUTE: DELETE MATCH PROOF ---
+app.post('/api/delete-evidence', async (req, res) => {
+    const { tourId, stageId, matchId } = req.body;
+    try {
+        const tour = await Tournament.findById(tourId);
+        const stage = tour.fixtures.id(stageId);
+        const match = stage.matches.id(matchId);
+        
+        match.evidence = ""; // Clear the link
+        await tour.save();
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
 
 
 // 4. START SERVER
