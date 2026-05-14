@@ -69,7 +69,8 @@ const User = mongoose.models.User || mongoose.model('User', new mongoose.Schema(
     username: { type: String, unique: true, required: true },
     password: { type: String, required: true }, // In production, use bcrypt to hash
     balance: { type: Number, default: 10000 },
-    verified: { type: Boolean, default: false }
+    verified: { type: Boolean, default: false },
+    lastClaim: { type: Date, default: null }
 }), 'users');
 
 const Bet = mongoose.models.Bet || mongoose.model('Bet', new mongoose.Schema({
@@ -730,6 +731,31 @@ app.post('/api/bets/place', async (req, res) => {
         await new Bet({ userId, username: user.username, matchId, pick, slips, multiplier }).save();
         res.json({ success: true, newBalance: user.balance });
     } catch (e) { res.status(500).json({ error: "Fail" }); }
+});
+// --- DAILY REWARD ROUTE ---
+app.post('/api/auth/claim-daily', async (req, res) => {
+    const { userId } = req.body;
+    try {
+        const user = await User.findById(userId);
+        if (!user) return res.status(404).json({ error: "User not found" });
+
+        const now = new Date();
+        const lastClaim = user.lastClaim ? new Date(user.lastClaim) : new Date(0);
+        
+        // Calculate difference in hours
+        const diffHours = (now - lastClaim) / (1000 * 60 * 60);
+
+        if (diffHours < 24) {
+            const remaining = (24 - diffHours).toFixed(1);
+            return res.status(400).json({ error: `Next reward in ${remaining} hours.` });
+        }
+
+        user.balance += 500; // The reward amount
+        user.lastClaim = now;
+        await user.save();
+
+        res.json({ success: true, newBalance: user.balance });
+    } catch (err) { res.status(500).json({ error: "Internal Server Error" }); }
 });
 
 
