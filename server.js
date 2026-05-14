@@ -2,6 +2,8 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 require('dotenv').config();
+const { Resend } = require('resend');
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 const app = express();
 app.use(cors());
@@ -153,33 +155,35 @@ app.post('/api/auth/request-otp', async (req, res) => {
     const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
 
     try {
-        // 1. Save to Database
         await OTP.findOneAndUpdate({ email }, { code: otpCode }, { upsert: true });
 
-        // 2. CRITICAL: Print code to Render Logs so you can see it!
-        console.log("-----------------------------------------");
-        console.log(`🔑 NEXUS DEBUG: OTP FOR ${email} IS: ${otpCode}`);
-        console.log("-----------------------------------------");
+        // LOG for safety
+        console.log(`🔑 OTP for ${email}: ${otpCode}`);
 
-        const mailOptions = {
-            from: `"Nexus Arena" <${process.env.EMAIL_USER}>`,
+        // SENDING VIA RESEND API (Not Blocked by Render)
+        const { data, error } = await resend.emails.send({
+            from: 'Nexus Arena <onboarding@resend.dev>', // Free tier uses this sender
             to: email,
-            subject: "Arena Access Code",
-            text: `Your code is ${otpCode}`
-        };
-
-        // 3. Attempt to send email but DON'T wait for it
-        // This stops the "Sending..." button from getting stuck
-        transporter.sendMail(mailOptions).catch(err => {
-            console.log("📧 Email blocked by Render, but that's okay for now.");
+            subject: `${otpCode} is your Arena Access Code`,
+            html: `
+                <div style="background:#050505; color:white; padding:20px; border:2px solid #E4FF00; text-align:center; font-family:sans-serif;">
+                    <h1 style="color:#E4FF00;">NEXUS LEGENDS</h1>
+                    <p>Your access code is:</p>
+                    <h1 style="font-size:3rem; letter-spacing:10px;">${otpCode}</h1>
+                </div>
+            `
         });
 
-        // 4. Immediately tell the browser "Success" 
-        // This allows you to move to the "Enter Code" screen
-        res.json({ success: true, message: "Check Render logs for code if email doesn't arrive." });
+        if (error) {
+            console.error("❌ Resend Error:", error);
+            // Even if email fails, we send success so you can use the code from the logs
+            return res.json({ success: true, debug: "Check logs" });
+        }
+
+        res.json({ success: true });
 
     } catch (e) {
-        res.status(500).json({ error: "Database Error" });
+        res.status(500).json({ error: "Server Error" });
     }
 });
 
