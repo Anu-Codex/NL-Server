@@ -157,32 +157,43 @@ app.post('/api/auth/request-otp', async (req, res) => {
     try {
         await OTP.findOneAndUpdate({ email }, { code: otpCode }, { upsert: true });
 
-        // LOG for safety
+        // Log the code so you can still see it in Render if needed
         console.log(`🔑 OTP for ${email}: ${otpCode}`);
 
-        // SENDING VIA RESEND API (Not Blocked by Render)
-        const { data, error } = await resend.emails.send({
-            from: 'Nexus Arena <onboarding@resend.dev>', // Free tier uses this sender
-            to: email,
-            subject: `${otpCode} is your Arena Access Code`,
-            html: `
-                <div style="background:#050505; color:white; padding:20px; border:2px solid #E4FF00; text-align:center; font-family:sans-serif;">
-                    <h1 style="color:#E4FF00;">NEXUS LEGENDS</h1>
-                    <p>Your access code is:</p>
-                    <h1 style="font-size:3rem; letter-spacing:10px;">${otpCode}</h1>
-                </div>
-            `
+        // --- SENDING VIA BREVO API ---
+        const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+            method: 'POST',
+            headers: {
+                'accept': 'application/json',
+                'api-key': process.env.BREVO_API_KEY,
+                'content-type': 'application/json'
+            },
+            body: JSON.stringify({
+                sender: { name: "Nexus Arena", email: "skaranubhav48@gmail.com" }, // Use your registered Brevo email
+                to: [{ email: email }],
+                subject: `[${otpCode}] Your Arena Access Code`,
+                htmlContent: `
+                    <div style="background:#050505; color:white; padding:30px; text-align:center; border:2px solid #E4FF00; font-family:sans-serif;">
+                        <h1 style="color:#E4FF00;">NEXUS LEGENDS</h1>
+                        <p>Your access code to the Prediction Center is:</p>
+                        <h1 style="font-size:3.5rem; letter-spacing:10px; margin:20px 0;">${otpCode}</h1>
+                        <p style="color:#555;">Valid for 5 minutes.</p>
+                    </div>`
+            })
         });
 
-        if (error) {
-            console.error("❌ Resend Error:", error);
-            // Even if email fails, we send success so you can use the code from the logs
-            return res.json({ success: true, debug: "Check logs" });
+        if (response.ok) {
+            console.log("✅ Email sent via Brevo to:", email);
+            res.json({ success: true });
+        } else {
+            const errData = await response.json();
+            console.error("❌ Brevo Error:", errData);
+            // Backup success so you can use code from logs
+            res.json({ success: true, debug: "Mail delayed" });
         }
 
-        res.json({ success: true });
-
     } catch (e) {
+        console.error("Server Error:", e);
         res.status(500).json({ error: "Server Error" });
     }
 });
