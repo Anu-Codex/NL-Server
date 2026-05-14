@@ -805,7 +805,7 @@ app.post('/api/auth/verify-ad-code', async (req, res) => {
 // --- NEW GLOBAL SETTINGS ---
 let adSettings = {
     reward: 100,
-    link: "https://inshorturl.in/9AamdnB"
+    link: "https://shrinkme.click/kk11PbZ8"
 };
 
 // Route to get settings
