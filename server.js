@@ -169,7 +169,7 @@ app.post('/api/auth/request-otp', async (req, res) => {
                 'content-type': 'application/json'
             },
             body: JSON.stringify({
-                sender: { name: "Nexus Arena", email: "skaranubhav48@gmail.com" }, // Use your registered Brevo email
+                sender: { name: "Nexus Arena", email: "mysticfcmlegends@gmail.com" }, // Use your registered Brevo email
                 to: [{ email: email }],
                 subject: `[${otpCode}] Your Arena Access Code`,
                 htmlContent: `
