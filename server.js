@@ -734,28 +734,36 @@ app.post('/api/bets/place', async (req, res) => {
 });
 // --- DAILY REWARD ROUTE ---
 app.post('/api/auth/claim-daily', async (req, res) => {
-    const { userId } = req.body;
     try {
+        const { userId } = req.body;
+        if (!userId) return res.status(400).json({ error: "User ID missing from request." });
+
         const user = await User.findById(userId);
-        if (!user) return res.status(404).json({ error: "User not found" });
+        if (!user) return res.status(404).json({ error: "User profile not found." });
 
         const now = new Date();
+        // If they never claimed, set lastClaim to a very old date
         const lastClaim = user.lastClaim ? new Date(user.lastClaim) : new Date(0);
         
-        // Calculate difference in hours
-        const diffHours = (now - lastClaim) / (1000 * 60 * 60);
+        // Calculate hours since last claim
+        const diffMs = now - lastClaim;
+        const diffHours = diffMs / (1000 * 60 * 60);
 
         if (diffHours < 24) {
-            const remaining = (24 - diffHours).toFixed(1);
-            return res.status(400).json({ error: `Next reward in ${remaining} hours.` });
+            const timeLeft = (24 - diffHours).toFixed(1);
+            return res.status(400).json({ error: `Reward locked. Try again in ${timeLeft} hours.` });
         }
 
-        user.balance += 500; // The reward amount
+        // Update balance and save date
+        user.balance += 500;
         user.lastClaim = now;
         await user.save();
 
         res.json({ success: true, newBalance: user.balance });
-    } catch (err) { res.status(500).json({ error: "Internal Server Error" }); }
+    } catch (err) {
+        console.error("Daily Claim Error:", err);
+        res.status(500).json({ error: "Database error. Contact Admin." });
+    }
 });
 
 
