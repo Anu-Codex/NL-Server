@@ -12,18 +12,28 @@ mongoose.connect(process.env.MONGO_URI)
     .then(() => console.log("✅ Nexus DB Connected Successfully"))
     .catch(err => console.error("❌ DB Connection Error:", err));
 const nodemailer = require('nodemailer');
+// --- THE "BULLETPROOF" SMTP CONFIG ---
 const transporter = nodemailer.createTransport({
-    service: 'gmail',
+    host: 'smtp.gmail.com',
+    port: 465,
+    secure: true, // Use SSL
     auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS
-    }
+    },
+    // Increase timeouts so Render doesn't give up too early
+    connectionTimeout: 10000, // 10 seconds
+    greetingTimeout: 10000,
+    socketTimeout: 10000
 });
 
-// Verify connection
+// CHECK CONNECTION IMMEDIATELY
 transporter.verify((error, success) => {
-    if (error) console.log("❌ Mail Server Error:", error);
-    else console.log("✅ Mail Server Ready to send OTPs");
+    if (error) {
+        console.log("❌ MAIL SERVER STILL BLOCKED:", error.message);
+    } else {
+        console.log("✅ MAIL SERVER IS OPEN AND READY");
+    }
 });
 
 // 2. DEFINE SCHEMAS & MODELS
