@@ -13,30 +13,6 @@ app.use(express.json());
 mongoose.connect(process.env.MONGO_URI)
     .then(() => console.log("✅ Nexus DB Connected Successfully"))
     .catch(err => console.error("❌ DB Connection Error:", err));
-const nodemailer = require('nodemailer');
-// --- THE "BULLETPROOF" SMTP CONFIG ---
-const transporter = nodemailer.createTransport({
-    host: 'smtp.gmail.com',
-    port: 587,
-    secure: false, // Use SSL
-    auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS
-    },
-    // Increase timeouts so Render doesn't give up too early
-    connectionTimeout: 10000, // 10 seconds
-    greetingTimeout: 10000,
-    socketTimeout: 10000
-});
-
-// CHECK CONNECTION IMMEDIATELY
-transporter.verify((error, success) => {
-    if (error) {
-        console.log("❌ MAIL SERVER STILL BLOCKED:", error.message);
-    } else {
-        console.log("✅ MAIL SERVER IS OPEN AND READY");
-    }
-});
 
 // 2. DEFINE SCHEMAS & MODELS
 
@@ -141,11 +117,6 @@ const OTP = mongoose.models.OTP || mongoose.model('OTP', new mongoose.Schema({
     createdAt: { type: Date, default: Date.now, expires: 300 } 
 }), 'otps');
 
-// --- CRITICAL: ADD THIS BEFORE YOUR ROUTES ---
-transporter.verify((error, success) => {
-    if (error) console.log("❌ MAIL CONFIG ERROR: Check EMAIL_USER and EMAIL_PASS in Render settings");
-    else console.log("✅ MAIL ENGINE READY");
-});
 
 // --- UPDATED REQUEST OTP ROUTE ---
 app.post('/api/auth/request-otp', async (req, res) => {
