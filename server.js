@@ -118,18 +118,40 @@ const OTP = mongoose.models.OTP || mongoose.model('OTP', new mongoose.Schema({
 
 // --- UPDATED REQUEST OTP ROUTE ---
 app.post('/api/auth/request-otp', async (req, res) => {
-    const { email } = req.body;
+    const { email, type } = req.body; // type will be 'signup' or 'login'
     if (!email) return res.status(400).json({ error: "Email required" });
 
-    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
-
     try {
+        // 1. Check if user already exists
+        const userExists = await User.findOne({ username: email });
+
+        // 2. Prevent same email signup / Stop guest login
+        if (type === 'signup' && userExists) {
+            return res.status(400).json({ error: "Email already registered. Please use Sign In." });
+        }
+        if (type === 'login' && !userExists) {
+            return res.status(400).json({ error: "Account not found. Please Sign Up first." });
+        }
+
+        const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
         await OTP.findOneAndUpdate({ email }, { code: otpCode }, { upsert: true });
 
-        // Log the code so you can still see it in Render if needed
-        console.log(`🔑 OTP for ${email}: ${otpCode}`);
+        // 3. Define Email Content based on Type
+        let emailSubject = "";
+        let emailHeadline = "";
+        let emailSubtext = "";
 
-        // --- SENDING VIA BREVO API ---
+        if (type === 'signup') {
+            emailSubject = `Welcome to the Elite - ${otpCode}`;
+            emailHeadline = "WELCOME TO THE ARENA";
+            emailSubtext = `Verify your account to join the elite and claim your <br><b style="color: #E4FF00;">₦10,000 Sign-up Bonus</b>.`;
+        } else {
+            emailSubject = `Welcome Back - ${otpCode}`;
+            emailHeadline = "WELCOME BACK STRIKER";
+            emailSubtext = "Use this code to return to your dashboard and manage your slips.";
+        }
+
+        // 4. Send via Brevo
         const response = await fetch('https://api.brevo.com/v3/smtp/email', {
             method: 'POST',
             headers: {
@@ -138,9 +160,9 @@ app.post('/api/auth/request-otp', async (req, res) => {
                 'content-type': 'application/json'
             },
             body: JSON.stringify({
-                sender: { name: "Nexus Arena", email: "mysticfcmlegends@gmail.com" }, // Use your registered Brevo email
+                sender: { name: "Nexus Arena", email: "mysticfcmlegends@gmail.com" },
                 to: [{ email: email }],
-                subject: `[${otpCode}] Your Arena Access Code`,
+                subject: emailSubject,
                 htmlContent: `
             <div style="background-color: #050505; padding: 40px 10px; font-family: 'Rajdhani', sans-serif, Arial; color: white; text-align: center;">
                 <div style="max-width: 450px; margin: 0 auto; background: #0a0a0a; border: 1px solid #1a1a1a; border-radius: 20px; overflow: hidden; box-shadow: 0 20px 50px rgba(0,0,0,0.5);">
@@ -187,22 +209,11 @@ app.post('/api/auth/request-otp', async (req, res) => {
             })
         });
 
-        if (response.ok) {
-            console.log("✅ Email sent via Brevo to:", email);
-            res.json({ success: true });
-        } else {
-            const errData = await response.json();
-            console.error("❌ Brevo Error:", errData);
-            // Backup success so you can use code from logs
-            res.json({ success: true, debug: "Mail delayed" });
-        }
+        if (response.ok) res.json({ success: true });
+        else res.status(500).json({ error: "Email delivery failed" });
 
-    } catch (e) {
-        console.error("Server Error:", e);
-        res.status(500).json({ error: "Server Error" });
-    }
+    } catch (e) { res.status(500).json({ error: "Server Error" }); }
 });
-
 
 // 2. VERIFY OTP & SIGN IN
 app.post('/api/auth/verify-otp', async (req, res) => {
