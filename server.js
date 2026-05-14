@@ -70,7 +70,8 @@ const User = mongoose.models.User || mongoose.model('User', new mongoose.Schema(
     password: { type: String, required: true }, // In production, use bcrypt to hash
     balance: { type: Number, default: 10000 },
     verified: { type: Boolean, default: false },
-    lastClaim: { type: Date, default: null }
+    lastClaim: { type: Date, default: null },
+    pendingAdCode: { type: String, default: null } 
 }), 'users');
 
 const Bet = mongoose.models.Bet || mongoose.model('Bet', new mongoose.Schema({
@@ -765,35 +766,74 @@ app.post('/api/auth/claim-daily', async (req, res) => {
         res.status(500).json({ error: "Database error. Contact Admin." });
     }
 });
-
-// Variable to store the current active ad code (can be changed via dashboard)
-let currentAdCode = "NEXUS100";
-
-// 1. Route for Admin to change the code
-app.post('/api/admin/set-ad-code', (req, res) => {
-    currentAdCode = req.body.code;
-    res.json({ success: true, newCode: currentAdCode });
+// 1. Generate a unique code for a user when they click the ad link
+app.get('/api/ad/generate-code/:userId', async (req, res) => {
+    try {
+        const { userId } = req.params;
+        // Generate a random 6-character uppercase string
+        const uniqueCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+        
+        await User.findByIdAndUpdate(userId, { pendingAdCode: uniqueCode });
+        res.json({ success: true });
+    } catch (e) { res.status(500).json({ error: "Server Error" }); }
 });
 
-// 2. Route for User to claim reward
+// 2. Fetch the user's specific code (Used by vault.html)
+app.get('/api/ad/get-my-code/:userId', async (req, res) => {
+    try {
+        const user = await User.findById(req.params.userId);
+        res.json({ code: user.pendingAdCode });
+    } catch (e) { res.json({ code: "EXPIRED" }); }
+});
+
+// 3. Verify and Clear (Claim Reward)
 app.post('/api/auth/verify-ad-code', async (req, res) => {
     const { userId, userCode } = req.body;
     try {
-        if (userCode !== currentAdCode) {
-            return res.status(400).json({ error: "Invalid Secret Code!" });
+        const user = await User.findById(userId);
+        if (!user.pendingAdCode || userCode !== user.pendingAdCode) {
+            return res.status(400).json({ error: "Invalid or Expired Code!" });
         }
 
-        const user = await User.findById(userId);
-        user.balance += 100; // Reward amount
+        user.balance += 100; 
+        user.pendingAdCode = null; // RESET the code so it can't be used again
         await user.save();
 
         res.json({ success: true, newBalance: user.balance });
-    } catch (err) { res.status(500).json({ error: "Server Error" }); }
+    } catch (err) { res.status(500).json({ error: "System Error" }); }
 });
-// Add this near your other routes in server.js
-app.get('/api/public/ad-code', (req, res) => {
-    // currentAdCode is the variable we created in the previous step
-    res.json({ code: currentAdCode });
+// --- NEW GLOBAL SETTINGS ---
+let adSettings = {
+    reward: 100,
+    link: "https://inshorturl.in/9AamdnB"
+};
+
+// Route to get settings
+app.get('/api/admin/ad-settings', (req, res) => res.json(adSettings));
+
+// Route to update settings
+app.post('/api/admin/ad-settings', (req, res) => {
+    adSettings.reward = parseInt(req.body.reward) || 100;
+    adSettings.link = req.body.link || adSettings.link;
+    res.json({ success: true, settings: adSettings });
+});
+
+// --- UPDATE THE VERIFY ROUTE TO USE THE VARIABLE REWARD ---
+app.post('/api/auth/verify-ad-code', async (req, res) => {
+    const { userId, userCode } = req.body;
+    try {
+        const user = await User.findById(userId);
+        if (!user.pendingAdCode || userCode !== user.pendingAdCode) {
+            return res.status(400).json({ error: "Invalid or Expired Code!" });
+        }
+
+        // Use the global variable instead of hardcoded 100
+        user.balance += adSettings.reward; 
+        user.pendingAdCode = null; 
+        await user.save();
+
+        res.json({ success: true, newBalance: user.balance, rewardGiven: adSettings.reward });
+    } catch (err) { res.status(500).json({ error: "System Error" }); }
 });
 
 // 4. START SERVER
