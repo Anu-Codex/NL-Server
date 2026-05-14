@@ -589,7 +589,7 @@ app.post('/api/bets/settle', async (req, res) => {
         
         // IMPORTANT: Only when you click "WON", it becomes "Settled" and hides from page
         await Prediction.findOneAndUpdate({ matchId }, { status: "Settled" });
-        await new Activity({ text:Payout Distributed! Users won ₦ credits on match ${matchId.slice(-5)}}).save();
+        await new Activity({ text: `Payout Distributed! Users won ₦ credits on match ${matchId.slice(-5)}`}).save();
         res.json({ success: true });
     } catch (err) { res.status(500).json({ error: "Settle Error" }); }
 });
@@ -736,7 +736,7 @@ app.post('/api/bets/place', async (req, res) => {
         user.balance -= cost;
         await user.save();
         await new Bet({ userId, username: user.username, matchId, pick, slips, multiplier }).save();
-        await new Activity({ text:New Prediction Slip purchased for match ID: ${matchId.slice(-5)}}).save();
+        await new Activity({ text: `New Prediction Slip purchased for match ID: ${matchId.slice(-5)}`}).save();
         res.json({ success: true, newBalance: user.balance });
     } catch (e) { res.status(500).json({ error: "Fail" }); }
 });
@@ -766,7 +766,7 @@ app.post('/api/auth/claim-daily', async (req, res) => {
         user.balance += 500;
         user.lastClaim = now;
         await user.save();
-        await new Activity({ text:${user.username.split('@')[0]} claimed 500 ₦ Daily Bonus!}).save();
+        await new Activity({ text:`${user.username.split('@')[0]} claimed 500 ₦ Daily Bonus!`}).save();
 
         res.json({ success: true, newBalance: user.balance });
     } catch (err) {
