@@ -116,16 +116,15 @@ const OTP = mongoose.models.OTP || mongoose.model('OTP', new mongoose.Schema({
 }), 'otps');
 
 
-// --- UPDATED REQUEST OTP ROUTE ---
-// --- FIXED REQUEST OTP ROUTE ---
+// --- CORRECTED REQUEST OTP ROUTE (REPLACE LINES 105-183) ---
 app.post('/api/auth/request-otp', async (req, res) => {
-    const { email, type } = req.body; 
+    const { email, type } = req.body; // type is 'signup' or 'login'
     if (!email) return res.status(400).json({ error: "Email required" });
 
     try {
         const userExists = await User.findOne({ username: email });
 
-        // Security logic
+        // Security: Prevent duplicate signup or signin to non-existent account
         if (type === 'signup' && userExists) {
             return res.status(400).json({ error: "Email already registered. Please use Sign In." });
         }
@@ -136,7 +135,7 @@ app.post('/api/auth/request-otp', async (req, res) => {
         const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
         await OTP.findOneAndUpdate({ email }, { code: otpCode }, { upsert: true });
 
-        // FIX: Added backticks below to fix the "Unexpected identifier" error
+        // Dynamic Content Logic
         let emailSubject = type === 'signup' ? `Welcome to Nexus - ${otpCode}` : `Arena Access Code - ${otpCode}`;
         let emailHeadline = type === 'signup' ? "WELCOME TO THE ARENA" : "WELCOME BACK STRIKER";
         let emailSubtext = type === 'signup' 
@@ -180,6 +179,7 @@ app.post('/api/auth/request-otp', async (req, res) => {
 
     } catch (e) { res.status(500).json({ error: "Server Error" }); }
 });
+
 
 // 2. VERIFY OTP & SIGN IN
 app.post('/api/auth/verify-otp', async (req, res) => {
