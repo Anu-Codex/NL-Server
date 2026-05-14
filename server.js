@@ -117,15 +117,15 @@ const OTP = mongoose.models.OTP || mongoose.model('OTP', new mongoose.Schema({
 
 
 // --- UPDATED REQUEST OTP ROUTE ---
+// --- FIXED REQUEST OTP ROUTE ---
 app.post('/api/auth/request-otp', async (req, res) => {
-    const { email, type } = req.body; // type will be 'signup' or 'login'
+    const { email, type } = req.body; 
     if (!email) return res.status(400).json({ error: "Email required" });
 
     try {
-        // 1. Check if user already exists
         const userExists = await User.findOne({ username: email });
 
-        // 2. Prevent same email signup / Stop guest login
+        // Security logic
         if (type === 'signup' && userExists) {
             return res.status(400).json({ error: "Email already registered. Please use Sign In." });
         }
@@ -136,80 +136,7 @@ app.post('/api/auth/request-otp', async (req, res) => {
         const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
         await OTP.findOneAndUpdate({ email }, { code: otpCode }, { upsert: true });
 
-        // 3. Define Email Content based on Type
-        let emailSubject = "";
-        let emailHeadline = "";
-        let emailSubtext = "";
-
-        if (type === 'signup') {
-            emailSubject = `Welcome to the Elite - ${otpCode}`;
-            emailHeadline = "WELCOME TO THE ARENA";
-            emailSubtext = `Verify your account to join the elite and claim your <br><b style="color: #E4FF00;">₦10,000 Sign-up Bonus</b>.`;
-        } else {
-            emailSubject = `Welcome Back - ${otpCode}`;
-            emailHeadline = "WELCOME BACK STRIKER";
-            emailSubtext = "Use this code to return to your dashboard and manage your slips.";
-        }
-
-        // 4. Send via Brevo
-        const response = await fetch('https://api.brevo.com/v3/smtp/email', {
-            method: 'POST',
-            headers: {
-                'accept': 'application/json',
-                'api-key': process.env.BREVO_API_KEY,
-                'content-type': 'application/json'
-            },
-            body: JSON.stringify({
-                sender: { name: "Nexus Arena", email: "mysticfcmlegends@gmail.com" },
-                to: [{ email: email }],
-                subject: emailSubject,
-                htmlContent: `
-            <div style="background-color: #050505; padding: 40px 10px; font-family: 'Rajdhani', sans-serif, Arial; color: white; text-align: center;">
-                <div style="max-width: 450px; margin: 0 auto; background: #0a0a0a; border: 1px solid #1a1a1a; border-radius: 20px; overflow: hidden; box-shadow: 0 20px 50px rgba(0,0,0,0.5);">
-                    
-                    <!-- Header with Nexus Gradient -->
-                    <div style="background: linear-gradient(to right, #0041FF, #050505); padding: 25px; border-bottom: 2px solid #E4FF00;">
-                        <h1 style="margin: 0; color: #fff; text-transform: uppercase; letter-spacing: 4px; font-size: 1.6rem; font-weight: 700;">
-                            NEXUS <span style="color: #E4FF00;">LEGENDS</span>
-                        </h1>
-                    </div>
-
-                    <!-- Main Content -->
-                    <div style="padding: 40px 30px;">
-                        <p style="color: #E4FF00; text-transform: uppercase; letter-spacing: 3px; font-size: 0.8rem; margin-bottom: 10px; font-weight: 700;">
-                            Security Verification
-                        </p>
-                        <h2 style="margin: 0; font-size: 1.3rem; color: #fff; text-transform: uppercase;">ARENA ACCESS CODE</h2>
-                        
-                        <!-- THE OTP BOX -->
-                        <div style="margin: 30px 0; background: #000; border: 1px dashed #333; padding: 25px; border-radius: 15px;">
-                            <div style="font-size: 3.8rem; font-weight: 900; color: #E4FF00; letter-spacing: 12px; text-shadow: 0 0 15px rgba(228, 255, 0, 0.4);">
-                                ${otpCode}
-                            </div>
-                        </div>
-
-                        <p style="color: #888; font-size: 0.95rem; line-height: 1.6; margin-bottom: 0;">
-                            Enter this code to access your profile and <br>
-                            claim your <b style="color: #E4FF00;">₦10,000 Sign-up Bonus</b>.
-app.post('/api/auth/request-otp', async (req, res) => {
-    const { email, type } = req.body; // type is 'signup' or 'login'
-    if (!email) return res.status(400).json({ error: "Email required" });
-
-    try {
-        const userExists = await User.findOne({ username: email });
-
-        // Logic to prevent duplicate signup or login to non-existent account
-        if (type === 'signup' && userExists) {
-            return res.status(400).json({ error: "Email already registered. Please use Sign In." });
-        }
-        if (type === 'login' && !userExists) {
-            return res.status(400).json({ error: "Account not found. Please Sign Up first." });
-        }
-
-        const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
-        await OTP.findOneAndUpdate({ email }, { code: otpCode }, { upsert: true });
-
-        // Determine Email Content
+        // FIX: Added backticks below to fix the "Unexpected identifier" error
         let emailSubject = type === 'signup' ? `Welcome to Nexus - ${otpCode}` : `Arena Access Code - ${otpCode}`;
         let emailHeadline = type === 'signup' ? "WELCOME TO THE ARENA" : "WELCOME BACK STRIKER";
         let emailSubtext = type === 'signup' 
@@ -249,9 +176,9 @@ app.post('/api/auth/request-otp', async (req, res) => {
         });
 
         if (response.ok) res.json({ success: true });
-        else res.status(500).json({ error: "Email provider error" });
+        else res.status(500).json({ error: "Email delivery failed" });
 
-    } catch (e) { res.status(500).json({ error: "Server error" }); }
+    } catch (e) { res.status(500).json({ error: "Server Error" }); }
 });
 
 // 2. VERIFY OTP & SIGN IN
