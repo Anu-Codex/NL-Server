@@ -766,6 +766,35 @@ app.post('/api/auth/claim-daily', async (req, res) => {
     }
 });
 
+// Variable to store the current active ad code (can be changed via dashboard)
+let currentAdCode = "NEXUS100";
+
+// 1. Route for Admin to change the code
+app.post('/api/admin/set-ad-code', (req, res) => {
+    currentAdCode = req.body.code;
+    res.json({ success: true, newCode: currentAdCode });
+});
+
+// 2. Route for User to claim reward
+app.post('/api/auth/verify-ad-code', async (req, res) => {
+    const { userId, userCode } = req.body;
+    try {
+        if (userCode !== currentAdCode) {
+            return res.status(400).json({ error: "Invalid Secret Code!" });
+        }
+
+        const user = await User.findById(userId);
+        user.balance += 100; // Reward amount
+        await user.save();
+
+        res.json({ success: true, newBalance: user.balance });
+    } catch (err) { res.status(500).json({ error: "Server Error" }); }
+});
+// Add this near your other routes in server.js
+app.get('/api/public/ad-code', (req, res) => {
+    // currentAdCode is the variable we created in the previous step
+    res.json({ code: currentAdCode });
+});
 
 // 4. START SERVER
 const PORT = process.env.PORT || 5000;
