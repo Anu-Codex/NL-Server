@@ -846,15 +846,13 @@ app.post('/api/auth/verify-ad-code', async (req, res) => {
 app.get('/api/activities', async (req, res) => {
     try {
         const logs = await Activity.find().sort({ date: -1 }).limit(10);
-        
-        // If no activities exist yet, send a default one so the ticker isn't empty
+        // If DB is empty, send a default message instead of an error
         if (logs.length === 0) {
             return res.json([{ text: "Welcome to Nexus Legends Arena! Good luck Strikers!" }]);
         }
-        
         res.json(logs);
-    } catch (err) { 
-        res.status(500).json({ error: "Ticker offline" }); 
+    } catch (err) {
+        res.status(500).json({ error: "Internal Server Error" });
     }
 });
 
