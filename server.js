@@ -117,6 +117,11 @@ const OTP = mongoose.models.OTP || mongoose.model('OTP', new mongoose.Schema({
     createdAt: { type: Date, default: Date.now, expires: 300 } 
 }), 'otps');
 
+const Activity = mongoose.models.Activity || mongoose.model('Activity', new mongoose.Schema({
+    text: String,
+    date: { type: Date, default: Date.now }
+}), 'activities');
+
 
 // --- CORRECTED REQUEST OTP ROUTE (REPLACE LINES 105-183) ---
 app.post('/api/auth/request-otp', async (req, res) => {
@@ -584,6 +589,7 @@ app.post('/api/bets/settle', async (req, res) => {
         
         // IMPORTANT: Only when you click "WON", it becomes "Settled" and hides from page
         await Prediction.findOneAndUpdate({ matchId }, { status: "Settled" });
+        await new Activity({ text:Payout Distributed! Users won ₦ credits on match ${matchId.slice(-5)}}).save();
         res.json({ success: true });
     } catch (err) { res.status(500).json({ error: "Settle Error" }); }
 });
@@ -730,6 +736,7 @@ app.post('/api/bets/place', async (req, res) => {
         user.balance -= cost;
         await user.save();
         await new Bet({ userId, username: user.username, matchId, pick, slips, multiplier }).save();
+        await new Activity({ text:New Prediction Slip purchased for match ID: ${matchId.slice(-5)}}).save();
         res.json({ success: true, newBalance: user.balance });
     } catch (e) { res.status(500).json({ error: "Fail" }); }
 });
@@ -759,6 +766,7 @@ app.post('/api/auth/claim-daily', async (req, res) => {
         user.balance += 500;
         user.lastClaim = now;
         await user.save();
+        await new Activity({ text:${user.username.split('@')[0]} claimed 500 ₦ Daily Bonus!}).save();
 
         res.json({ success: true, newBalance: user.balance });
     } catch (err) {
@@ -834,6 +842,12 @@ app.post('/api/auth/verify-ad-code', async (req, res) => {
 
         res.json({ success: true, newBalance: user.balance, rewardGiven: adSettings.reward });
     } catch (err) { res.status(500).json({ error: "System Error" }); }
+});
+app.get('/api/activities', async (req, res) => {
+    try {
+        const logs = await Activity.find().sort({ date: -1 }).limit(10);
+        res.json(logs);
+    } catch (err) { res.status(500).json({ error: "Ticker offline" }); }
 });
 
 // 4. START SERVER
