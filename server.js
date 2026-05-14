@@ -142,12 +142,48 @@ app.post('/api/auth/request-otp', async (req, res) => {
                 to: [{ email: email }],
                 subject: `[${otpCode}] Your Arena Access Code`,
                 htmlContent: `
-                    <div style="background:#050505; color:white; padding:30px; text-align:center; border:2px solid #E4FF00; font-family:sans-serif;">
-                        <h1 style="color:#E4FF00;">NEXUS LEGENDS</h1>
-                        <p>Your access code to the Prediction Center is:</p>
-                        <h1 style="font-size:3.5rem; letter-spacing:10px; margin:20px 0;">${otpCode}</h1>
-                        <p style="color:#555;">Valid for 5 minutes.</p>
-                    </div>`
+            <div style="background-color: #050505; padding: 40px 10px; font-family: 'Rajdhani', sans-serif, Arial; color: white; text-align: center;">
+                <div style="max-width: 450px; margin: 0 auto; background: #0a0a0a; border: 1px solid #1a1a1a; border-radius: 20px; overflow: hidden; box-shadow: 0 20px 50px rgba(0,0,0,0.5);">
+                    
+                    <!-- Header with Nexus Gradient -->
+                    <div style="background: linear-gradient(to right, #0041FF, #050505); padding: 25px; border-bottom: 2px solid #E4FF00;">
+                        <h1 style="margin: 0; color: #fff; text-transform: uppercase; letter-spacing: 4px; font-size: 1.6rem; font-weight: 700;">
+                            NEXUS <span style="color: #E4FF00;">LEGENDS</span>
+                        </h1>
+                    </div>
+
+                    <!-- Main Content -->
+                    <div style="padding: 40px 30px;">
+                        <p style="color: #E4FF00; text-transform: uppercase; letter-spacing: 3px; font-size: 0.8rem; margin-bottom: 10px; font-weight: 700;">
+                            Security Verification
+                        </p>
+                        <h2 style="margin: 0; font-size: 1.3rem; color: #fff; text-transform: uppercase;">ARENA ACCESS CODE</h2>
+                        
+                        <!-- THE OTP BOX -->
+                        <div style="margin: 30px 0; background: #000; border: 1px dashed #333; padding: 25px; border-radius: 15px;">
+                            <div style="font-size: 3.8rem; font-weight: 900; color: #E4FF00; letter-spacing: 12px; text-shadow: 0 0 15px rgba(228, 255, 0, 0.4);">
+                                ${otpCode}
+                            </div>
+                        </div>
+
+                        <p style="color: #888; font-size: 0.95rem; line-height: 1.6; margin-bottom: 0;">
+                            Enter this code to access your profile and <br>
+                            claim your <b style="color: #E4FF00;">₦10,000 Sign-up Bonus</b>.
+                        </p>
+                    </div>
+
+                    <!-- Footer -->
+                    <div style="background: #0d0d0d; padding: 20px; border-top: 1px solid #1a1a1a;">
+                        <p style="margin: 0; color: #444; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 1px;">
+                            Valid for 5 minutes • Private Access Only
+                        </p>
+                        <div style="margin-top: 12px; color: #222; font-size: 0.6rem; font-weight: bold; letter-spacing: 1px;">
+                            © 2024 NEXUS LEGENDS ARENA • DOMINATE THE PITCH
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `
             })
         });
 
