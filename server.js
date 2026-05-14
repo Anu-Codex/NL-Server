@@ -11,6 +11,22 @@ app.use(express.json());
 mongoose.connect(process.env.MONGO_URI)
     .then(() => console.log("✅ Nexus DB Connected Successfully"))
     .catch(err => console.error("❌ DB Connection Error:", err));
+const nodemailer = require('nodemailer');
+
+// Configure the Email Engine
+const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+        user: process.env.EMAIL_USER, // Your Gmail address
+        pass: process.env.EMAIL_PASS  // Your 16-digit App Password
+    }
+});
+
+// Verify connection
+transporter.verify((error, success) => {
+    if (error) console.log("❌ Mail Server Error:", error);
+    else console.log("✅ Mail Server Ready to send OTPs");
+});
 
 // 2. DEFINE SCHEMAS & MODELS
 
@@ -107,6 +123,57 @@ const Subscriber = mongoose.models.Subscriber || mongoose.model('Subscriber', ne
     email: { type: String, unique: true, required: true },
     date: { type: Date, default: Date.now }
 }), 'subscribers');
+
+
+const OTP = mongoose.models.OTP || mongoose.model('OTP', new mongoose.Schema({
+    email: String,
+    code: String,
+    createdAt: { type: Date, default: Date.now, expires: 300 } // Auto-deletes after 5 mins
+}));
+// 1. REQUEST OTP (For both Sign Up & Login)
+app.post('/api/auth/request-otp', async (req, res) => {
+    const { email } = req.body;
+    const otpCode = Math.floor(100000 + Math.random() * 900000).toString(); // Generate 6 digits
+
+    try {
+        // Save OTP to DB
+        await OTP.findOneAndUpdate({ email }, { code: otpCode }, { upsert: true });
+
+        // Send Email
+        const mailOptions = {
+            from: `"Nexus Arena" <${process.env.EMAIL_USER}>`,
+            to: email,
+            subject: "Your Arena Access Code",
+            html: `<div style="background:#050505; color:white; padding:20px; text-align:center; border:1px solid #E4FF00;">
+                    <h2>NEXUS LEGENDS</h2>
+                    <p>Use the code below to access your account:</p>
+                    <h1 style="color:#E4FF00; letter-spacing:5px;">${otpCode}</h1>
+                    <p>Expires in 5 minutes.</p>
+                   </div>`
+        };
+        await transporter.sendMail(mailOptions);
+        res.json({ success: true });
+    } catch (e) { res.status(500).json({ error: "Failed to send OTP" }); }
+});
+
+// 2. VERIFY OTP & SIGN IN
+app.post('/api/auth/verify-otp', async (req, res) => {
+    const { email, code } = req.body;
+    try {
+        const record = await OTP.findOne({ email, code });
+        if (!record) return res.status(400).json({ error: "Invalid or expired code" });
+
+        // If valid, find user or create new (Sign Up)
+        let user = await User.findOne({ username: email }); // We use email as username now
+        if (!user) {
+            user = new User({ username: email, password: "otp_user", balance: 10000 });
+            await user.save();
+        }
+
+        await OTP.deleteOne({ email }); // Delete OTP after use
+        res.json({ success: true, user });
+    } catch (e) { res.status(500).json({ error: "Verification failed" }); }
+});
 
 // 3. API ROUTES
 
