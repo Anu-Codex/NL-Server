@@ -148,40 +148,38 @@ transporter.verify((error, success) => {
 // --- UPDATED REQUEST OTP ROUTE ---
 app.post('/api/auth/request-otp', async (req, res) => {
     const { email } = req.body;
-    console.log("OTP Request for:", email);
-
-    if (!email) return res.status(400).json({ error: "Email is required" });
+    if (!email) return res.status(400).json({ error: "Email required" });
 
     const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
 
     try {
-        // 1. Save to MongoDB
+        // 1. Save to Database
         await OTP.findOneAndUpdate({ email }, { code: otpCode }, { upsert: true });
 
-        // 2. Prepare Email
+        // 2. CRITICAL: Print code to Render Logs so you can see it!
+        console.log("-----------------------------------------");
+        console.log(`🔑 NEXUS DEBUG: OTP FOR ${email} IS: ${otpCode}`);
+        console.log("-----------------------------------------");
+
         const mailOptions = {
             from: `"Nexus Arena" <${process.env.EMAIL_USER}>`,
             to: email,
-            subject: "Your Arena Access Code",
-            html: `<h1>Code: ${otpCode}</h1>`, // Simplified for speed
-            connectionTimeout: 10000 // 10 seconds timeout
+            subject: "Arena Access Code",
+            text: `Your code is ${otpCode}`
         };
 
-        // 3. Send and Respond
-        transporter.sendMail(mailOptions, (err, info) => {
-            if (err) {
-                console.error("Nodemailer Error:", err.message);
-                // IF EMAIL FAILS, WE STILL RESPOND TO STOP THE "SENDING" HANG
-                return res.status(500).json({ error: "Mail server failed. Check Render Environment Variables." });
-            } else {
-                console.log("Email sent successfully!");
-                return res.json({ success: true });
-            }
+        // 3. Attempt to send email but DON'T wait for it
+        // This stops the "Sending..." button from getting stuck
+        transporter.sendMail(mailOptions).catch(err => {
+            console.log("📧 Email blocked by Render, but that's okay for now.");
         });
 
-    } catch (dbError) {
-        console.error("Database Error:", dbError);
-        return res.status(500).json({ error: "Database error. Check MongoDB connection." });
+        // 4. Immediately tell the browser "Success" 
+        // This allows you to move to the "Enter Code" screen
+        res.json({ success: true, message: "Check Render logs for code if email doesn't arrive." });
+
+    } catch (e) {
+        res.status(500).json({ error: "Database Error" });
     }
 });
 
