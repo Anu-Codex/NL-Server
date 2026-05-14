@@ -191,28 +191,67 @@ app.post('/api/auth/request-otp', async (req, res) => {
                         <p style="color: #888; font-size: 0.95rem; line-height: 1.6; margin-bottom: 0;">
                             Enter this code to access your profile and <br>
                             claim your <b style="color: #E4FF00;">₦10,000 Sign-up Bonus</b>.
-                        </p>
-                    </div>
+app.post('/api/auth/request-otp', async (req, res) => {
+    const { email, type } = req.body; // type is 'signup' or 'login'
+    if (!email) return res.status(400).json({ error: "Email required" });
 
-                    <!-- Footer -->
-                    <div style="background: #0d0d0d; padding: 20px; border-top: 1px solid #1a1a1a;">
-                        <p style="margin: 0; color: #444; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 1px;">
-                            Valid for 5 minutes • Private Access Only
-                        </p>
-                        <div style="margin-top: 12px; color: #222; font-size: 0.6rem; font-weight: bold; letter-spacing: 1px;">
-                            © 2024 NEXUS LEGENDS ARENA • DOMINATE THE PITCH
+    try {
+        const userExists = await User.findOne({ username: email });
+
+        // Logic to prevent duplicate signup or login to non-existent account
+        if (type === 'signup' && userExists) {
+            return res.status(400).json({ error: "Email already registered. Please use Sign In." });
+        }
+        if (type === 'login' && !userExists) {
+            return res.status(400).json({ error: "Account not found. Please Sign Up first." });
+        }
+
+        const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+        await OTP.findOneAndUpdate({ email }, { code: otpCode }, { upsert: true });
+
+        // Determine Email Content
+        let emailSubject = type === 'signup' ? `Welcome to Nexus - ${otpCode}` : `Arena Access Code - ${otpCode}`;
+        let emailHeadline = type === 'signup' ? "WELCOME TO THE ARENA" : "WELCOME BACK STRIKER";
+        let emailSubtext = type === 'signup' 
+            ? `Verify your account to join the elite and <br>claim your <b style="color: #E4FF00;">₦10,000 Sign-up Bonus</b>.` 
+            : `Use this code to return to your account <br>and manage your betting slips.`;
+
+        const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+            method: 'POST',
+            headers: {
+                'accept': 'application/json',
+                'api-key': process.env.BREVO_API_KEY,
+                'content-type': 'application/json'
+            },
+            body: JSON.stringify({
+                sender: { name: "Nexus Arena", email: "mysticfcmlegends@gmail.com" },
+                to: [{ email: email }],
+                subject: emailSubject,
+                htmlContent: `
+                <div style="background-color: #050505; padding: 40px 10px; font-family: sans-serif; color: white; text-align: center;">
+                    <div style="max-width: 450px; margin: 0 auto; background: #0a0a0a; border: 1px solid #1a1a1a; border-radius: 20px; overflow: hidden; box-shadow: 0 20px 50px rgba(0,0,0,0.5);">
+                        <div style="background: linear-gradient(to right, #0041FF, #050505); padding: 25px; border-bottom: 2px solid #E4FF00;">
+                            <h1 style="margin: 0; color: #fff; text-transform: uppercase; letter-spacing: 4px; font-size: 1.6rem;">NEXUS <span style="color: #E4FF00;">LEGENDS</span></h1>
+                        </div>
+                        <div style="padding: 40px 30px;">
+                            <h2 style="margin: 0; font-size: 1.3rem; color: #fff; text-transform: uppercase;">${emailHeadline}</h2>
+                            <div style="margin: 30px 0; background: #000; border: 1px dashed #333; padding: 25px; border-radius: 15px;">
+                                <div style="font-size: 3.8rem; font-weight: 900; color: #E4FF00; letter-spacing: 12px;">${otpCode}</div>
+                            </div>
+                            <p style="color: #888; font-size: 0.95rem; line-height: 1.6;">${emailSubtext}</p>
+                        </div>
+                        <div style="background: #0d0d0d; padding: 20px; border-top: 1px solid #1a1a1a; color: #444; font-size: 0.7rem;">
+                            VALID FOR 5 MINUTES • © 2024 NEXUS LEGENDS ARENA
                         </div>
                     </div>
-                </div>
-            </div>
-        `
+                </div>`
             })
         });
 
         if (response.ok) res.json({ success: true });
-        else res.status(500).json({ error: "Email delivery failed" });
+        else res.status(500).json({ error: "Email provider error" });
 
-    } catch (e) { res.status(500).json({ error: "Server Error" }); }
+    } catch (e) { res.status(500).json({ error: "Server error" }); }
 });
 
 // 2. VERIFY OTP & SIGN IN
@@ -578,15 +617,14 @@ app.post('/api/update-profile', async (req, res) => {
 
 app.get('/api/predictions', async (req, res) => {
     try {
-        // This query finds EVERYTHING that is not "Settled"
-        // This will bring back all your "vanished" matches immediately
+        // This ensures both "Open", "Available", and "Closed" matches show up.
+        // Matches only vanish when you settle them (WON/LOST).
         const data = await Prediction.find({ status: { $ne: "Settled" } });
         res.json(data);
     } catch (err) { 
-        res.status(500).json({ error: "Recovery Failed" }); 
+        res.status(500).json({ error: "Prediction fetch failed" }); 
     }
 });
-
 // --- FIX 2: NO DELETION (UPSERT LOGIC) ---
 app.post('/api/predictions/open', async (req, res) => {
     const { matchId, p1, p2, tourId, oddsP1, oddsDraw, oddsP2 } = req.body;
@@ -746,8 +784,10 @@ app.post('/api/bets/withdraw', async (req, res) => {
     }
 });
 app.get('/api/user-bets-all/:userId', async (req, res) => {
-    const bets = await Bet.find({ userId: req.params.userId, status: "Pending" });
-    res.json(bets);
+    try {
+        const bets = await Bet.find({ userId: req.params.userId, status: "Pending" });
+        res.json(bets);
+    } catch (e) { res.json([]); }
 });
 
 // --- UPDATE BET PLACING ROUTE (Check Status) ---
