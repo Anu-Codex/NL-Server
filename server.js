@@ -118,24 +118,23 @@ const OTP = mongoose.models.OTP || mongoose.model('OTP', new mongoose.Schema({
 
 // --- CORRECTED REQUEST OTP ROUTE (REPLACE LINES 105-183) ---
 app.post('/api/auth/request-otp', async (req, res) => {
-    const { email, type } = req.body; // type is 'signup' or 'login'
+    const { email, type } = req.body;
     if (!email) return res.status(400).json({ error: "Email required" });
 
     try {
         const userExists = await User.findOne({ username: email });
 
-        // Security: Prevent duplicate signup or signin to non-existent account
+        // Security logic
         if (type === 'signup' && userExists) {
-            return res.status(400).json({ error: "Email already registered. Please use Sign In." });
+            return res.status(400).json({ error: "Email already registered. Please Sign In." });
         }
         if (type === 'login' && !userExists) {
             return res.status(400).json({ error: "Account not found. Please Sign Up first." });
         }
-
         const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
         await OTP.findOneAndUpdate({ email }, { code: otpCode }, { upsert: true });
 
-        // Dynamic Content Logic
+        // Email Customization
         let emailSubject = type === 'signup' ? `Welcome to Nexus - ${otpCode}` : `Arena Access Code - ${otpCode}`;
         let emailHeadline = type === 'signup' ? "WELCOME TO THE ARENA" : "WELCOME BACK STRIKER";
         let emailSubtext = type === 'signup' 
@@ -144,42 +143,40 @@ app.post('/api/auth/request-otp', async (req, res) => {
 
         const response = await fetch('https://api.brevo.com/v3/smtp/email', {
             method: 'POST',
-            headers: {
-                'accept': 'application/json',
-                'api-key': process.env.BREVO_API_KEY,
-                'content-type': 'application/json'
-            },
+            headers: { 'api-key': process.env.BREVO_API_KEY, 'content-type': 'application/json' },
             body: JSON.stringify({
                 sender: { name: "Nexus Arena", email: "mysticfcmlegends@gmail.com" },
                 to: [{ email: email }],
                 subject: emailSubject,
                 htmlContent: `
                 <div style="background-color: #050505; padding: 40px 10px; font-family: sans-serif; color: white; text-align: center;">
-                    <div style="max-width: 450px; margin: 0 auto; background: #0a0a0a; border: 1px solid #1a1a1a; border-radius: 20px; overflow: hidden; box-shadow: 0 20px 50px rgba(0,0,0,0.5);">
+                <div style="max-width: 450px; margin: 0 auto; background: #0a0a0a; border: 1px solid #1a1a1a; border-radius: 20px; overflow: hidden; box-shadow: 0 20px 50px rgba(0,0,0,0.5);">
                         <div style="background: linear-gradient(to right, #0041FF, #050505); padding: 25px; border-bottom: 2px solid #E4FF00;">
                             <h1 style="margin: 0; color: #fff; text-transform: uppercase; letter-spacing: 4px; font-size: 1.6rem;">NEXUS <span style="color: #E4FF00;">LEGENDS</span></h1>
                         </div>
                         <div style="padding: 40px 30px;">
-                            <h2 style="margin: 0; font-size: 1.3rem; color: #fff; text-transform: uppercase;">${emailHeadline}</h2>
+                        <h2 style="margin: 0; font-size: 1.3rem; color: #fff; text-transform: uppercase;">${emailHeadline}</h2>
                             <div style="margin: 30px 0; background: #000; border: 1px dashed #333; padding: 25px; border-radius: 15px;">
                                 <div style="font-size: 3.8rem; font-weight: 900; color: #E4FF00; letter-spacing: 12px;">${otpCode}</div>
                             </div>
                             <p style="color: #888; font-size: 0.95rem; line-height: 1.6;">${emailSubtext}</p>
                         </div>
                         <div style="background: #0d0d0d; padding: 20px; border-top: 1px solid #1a1a1a; color: #444; font-size: 0.7rem;">
-                            VALID FOR 5 MINUTES • © 2024 NEXUS LEGENDS ARENA
+                        VALID FOR 5 MINUTES • © 2024 NEXUS LEGENDS ARENA
                         </div>
                     </div>
                 </div>`
             })
         });
 
-        if (response.ok) res.json({ success: true });
-        else res.status(500).json({ error: "Email delivery failed" });
-
+        if (response.ok) {
+            console.log(`🔑 OTP sent to ${email}: ${otpCode}`);
+            res.json({ success: true });
+        } else {
+            res.status(500).json({ error: "Email delivery failed" });
+        }
     } catch (e) { res.status(500).json({ error: "Server Error" }); }
 });
-
 
 // 2. VERIFY OTP & SIGN IN
 app.post('/api/auth/verify-otp', async (req, res) => {
