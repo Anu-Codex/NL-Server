@@ -187,7 +187,7 @@ app.post('/api/auth/request-otp', async (req, res) => {
 
 // 2. VERIFY OTP & SIGN IN
 app.post('/api/auth/verify-otp', async (req, res) => {
-    const { email, code } = req.body;
+    const { email, code, inviteCode } = req.body;
     try {
         const record = await OTP.findOne({ email, code });
         if (!record) return res.status(400).json({ error: "Invalid or expired code" });
@@ -198,10 +198,18 @@ app.post('/api/auth/verify-otp', async (req, res) => {
             user = new User({ 
                 username: email, 
                 password: "otp_user_no_pass", // placeholder
-                balance: 10000 
+                balance: 10000,
+                referredBy: inviteCode || null // Store who invited them
             });
             await user.save();
+            if (inviteCode && mongoose.Types.ObjectId.isValid(inviteCode)) {
+                await User.findByIdAndUpdate(inviteCode, { 
+                    $inc: { balance: 2000, referralCount: 1 } 
+                });
+                await new Activity({ text: `Referral Bonus! A recruiter earned 2,000 ₦` }).save();
+            }
         }
+    
         await OTP.deleteOne({ email });
         res.json({ success: true, user });
     } catch (e) {
@@ -854,6 +862,19 @@ app.get('/api/activities', async (req, res) => {
     } catch (err) {
         res.status(500).json({ error: "Internal Server Error" });
     }
+});
+// --- GET INDIVIDUAL USER REFERRAL STATS ---
+app.get('/api/user/referral-stats/:userId', async (req, res) => {
+    try {
+        const user = await User.findById(req.params.userId);
+        // Find all users who were invited by this user
+        const invitedUsers = await User.find({ referredBy: req.params.userId }, 'username date');
+        res.json({
+            balance: user.balance,
+            referralCount: user.referralCount || 0,
+            history: invitedUsers
+        });
+    } catch (err) { res.status(500).json({ error: "Failed to load stats" }); }
 });
 
 // 4. START SERVER
