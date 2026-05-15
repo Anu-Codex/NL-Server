@@ -190,31 +190,37 @@ app.post('/api/auth/verify-otp', async (req, res) => {
     const { email, code, inviteCode } = req.body;
     try {
         const record = await OTP.findOne({ email, code });
-        if (!record) return res.status(400).json({ error: "Invalid or expired code" });
+        if (!record) return res.status(400).json({ error: "Invalid code" });
 
-        // Email is the username in OTP mode
         let user = await User.findOne({ username: email });
+        
         if (!user) {
+            // 1. THIS IS A NEW USER
             user = new User({ 
                 username: email, 
-                password: "otp_user_no_pass", // placeholder
+                password: "otp_user", 
                 balance: 10000,
-                referredBy: inviteCode || null // Store who invited them
+                referredBy: inviteCode || null // Store the inviter's ID
             });
             await user.save();
+
+            // 2. CREDIT THE INVITER
             if (inviteCode && mongoose.Types.ObjectId.isValid(inviteCode)) {
-                await User.findByIdAndUpdate(inviteCode, { 
-                    $inc: { balance: 2000, referralCount: 1 } 
-                });
-                await new Activity({ text: `Referral Bonus! A recruiter earned 2,000 ₦` }).save();
+                const inviter = await User.findById(inviteCode);
+                if (inviter) {
+                    inviter.balance += 2000;
+                    inviter.referralCount = (inviter.referralCount || 0) + 1;
+                    await inviter.save();
+                    
+                    // Log to activities for the Ticker
+                    await new Activity({ text: `${inviter.username.split('@')[0]} earned 2,000 ₦ for a new recruit!` }).save();
+                }
             }
         }
-    
+
         await OTP.deleteOne({ email });
         res.json({ success: true, user });
-    } catch (e) {
-        res.status(500).json({ error: "Verification system error" });
-    }
+    } catch (e) { res.status(500).json({ error: "System Error" }); }
 });
 
 // 3. API ROUTES
