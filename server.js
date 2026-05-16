@@ -572,21 +572,21 @@ app.get('/api/predictions', async (req, res) => {
 });
 // --- FIX 2: NO DELETION (UPSERT LOGIC) ---
 app.post('/api/predictions/open', async (req, res) => {
-    const { matchId, p1, p2, tourId, oddsP1, oddsDraw, oddsP2 } = req.body;
+    // We use matchId because it is unique for every single game
+    const { matchId } = req.body; 
     try {
-        // Instead of deleteMany, we use findOneAndUpdate with "upsert: true"
-        // This updates the match if it exists, or creates it if it's missing.
-        // NO DATA LOSS.
+        // The "upsert" logic updates the existing match or creates a new one
+        // without deleting anything else.
         await Prediction.findOneAndUpdate(
-            { matchId: matchId },
-            { 
-                tourId, p1, p2, oddsP1, oddsDraw, oddsP2, 
-                status: "Available" // Force it back to visible
-            },
+            { matchId: matchId }, 
+            { ...req.body, status: "Available" }, 
             { upsert: true, new: true }
         );
         res.json({ success: true });
-    } catch (e) { res.status(500).json({ error: "Failed to open" }); }
+    } catch (e) {
+        console.error("Prediction Open Error:", e);
+        res.status(500).json({ error: "Failed to sync prediction" });
+    }
 });
 
 // --- FIX 3: GLOBAL SETTLE ---
