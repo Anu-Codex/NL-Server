@@ -897,6 +897,27 @@ app.post('/api/update-gs-ga', async (req, res) => {
         res.status(500).json({ error: "Failed to update stats" }); 
     }
 });
+// --- NEW ROUTE: DUAL GS & GA MANAGEMENT ---
+app.post('/api/update-gs-ga-duel', async (req, res) => {
+    const { p1Name, p2Name, p1gs, p1ga } = req.body;
+    
+    try {
+        const gs = parseInt(p1gs) || 0;
+        const ga = parseInt(p1ga) || 0;
+
+        if (p1Name === p2Name) return res.status(400).json({ error: "Cannot duel the same player!" });
+
+        // Update Player 1: Gets GS and GA as entered
+        await Player.updateOne({ name: p1Name }, { $inc: { goalsFor: gs, goalsAgainst: ga } });
+
+        // Update Player 2: Gets Player 1's GA as GS, and Player 1's GS as GA
+        await Player.updateOne({ name: p2Name }, { $inc: { goalsFor: ga, goalsAgainst: gs } });
+
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: "Database sync failed" });
+    }
+});
 
 // 4. START SERVER
 const PORT = process.env.PORT || 5000;
