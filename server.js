@@ -882,6 +882,21 @@ app.get('/api/user/referral-stats/:userId', async (req, res) => {
         });
     } catch (err) { res.status(500).json({ error: "Failed to load stats" }); }
 });
+// --- NEW ROUTE: MANUALLY MANAGE GS & GA ---
+app.post('/api/update-gs-ga', async (req, res) => {
+    const { name, goalsFor, goalsAgainst } = req.body;
+    try {
+        // Convert to numbers to ensure database integrity
+        const updateData = {};
+        if (goalsFor !== "") updateData.goalsFor = parseInt(goalsFor);
+        if (goalsAgainst !== "") updateData.goalsAgainst = parseInt(goalsAgainst);
+
+        await Player.updateOne({ name }, { $set: updateData });
+        res.json({ success: true });
+    } catch (err) { 
+        res.status(500).json({ error: "Failed to update stats" }); 
+    }
+});
 
 // 4. START SERVER
 const PORT = process.env.PORT || 5000;
