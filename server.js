@@ -7,15 +7,16 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// 1. CONNECT TO DATABASE
-mongoose.connect(process.env.MONGO_URI)
-    .then(() => console.log("✅ Nexus DB Connected Successfully"))
-    .catch(err => console.error("❌ DB Connection Error:", err));
+const arenaConn = mongoose.createConnection(process.env.MONGO_URI_ARENA);
+const nfaConn = mongoose.createConnection(process.env.MONGO_URI_NFA);
 
+// 1. CONNECT TO DATABASE
+arenaConn.on('connected', () => console.log("✅ DB 1: Arena/Core Connected"));
+nfaConn.on('connected', () => console.log("✅ DB 2: NFA Management Connected"));
 // 2. DEFINE SCHEMAS & MODELS
 
 // Player Stats Model (Global Rankings)
-const Player = mongoose.models.Player || mongoose.model('Player', new mongoose.Schema({
+const Player = new mongoose.Schema({
     name: String,
     wins: { type: Number, default: 0 },
     points: { type: Number, default: 0 },
@@ -27,17 +28,17 @@ const Player = mongoose.models.Player || mongoose.model('Player', new mongoose.S
     formation: { type: String, default: "4-3-3" },
     signaturePlayer: { type: String, default: "Standard" },
     avatar: { type: String, default: "" }
-}), 'players'); // Performance
+});
 
 
 // Announcement Model
-const Announcement = mongoose.models.Announcement || mongoose.model('Announcement', new mongoose.Schema({
+const Announcement = new mongoose.Schema({
     message: String,
     date: { type: Date, default: Date.now }
-}), 'announcements');
+});
 
 // Tournament Model (Roster, Fixtures, Standings)
-const Tournament = mongoose.models.Tournament || mongoose.model('Tournament', new mongoose.Schema({
+const Tournament = new mongoose.Schema({
     title: String,
     totalTeams: String,
     status: String,
@@ -64,64 +65,94 @@ const Tournament = mongoose.models.Tournament || mongoose.model('Tournament', ne
         }]
     }],
     pendingApplicants: [{ name: String, whatsapp: String, date: { type: Date, default: Date.now } }]
-}), 'tournaments');
-const User = mongoose.models.User || mongoose.model('User', new mongoose.Schema({
+});
+const User = new mongoose.Schema({
     username: { type: String, unique: true, required: true },
     password: { type: String, required: true }, // In production, use bcrypt to hash
     balance: { type: Number, default: 10000 },
     verified: { type: Boolean, default: false },
     lastClaim: { type: Date, default: null },
     pendingAdCode: { type: String, default: null } 
-}), 'users');
+});
 
-const Bet = mongoose.models.Bet || mongoose.model('Bet', new mongoose.Schema({
+const Bet = new mongoose.Schema({
     userId: String, username: String, matchId: String, pick: String,
     slips: { type: Number, default: 1 }, multiplier: Number, status: { type: String, default: "Pending" }
-}), 'bets');
+});
 
 // --- UPDATE PREDICTION SCHEMA ---
-const Prediction = mongoose.models.Prediction || mongoose.model('Prediction', new mongoose.Schema({
+const Prediction = new mongoose.Schema({
     tourId: String, matchId: String, p1: String, p2: String,
     oddsP1: { type: Number, default: 2.0 }, // Multipliers
     oddsDraw: { type: Number, default: 3.0 },
     oddsP2: { type: Number, default: 2.0 },
     status: { type: String, default: "Available" }
-}), 'predictions');
+});
 
 // --- FREE AGENT MODEL ---
-const FreeAgent = mongoose.models.FreeAgent || mongoose.model('FreeAgent', new mongoose.Schema({
+const FreeAgent = new mongoose.Schema({
     name: String, division: String, playstyle: String, basePrice: String, whatsapp: String,
     status: { type: String, default: "Available" }, date: { type: Date, default: Date.now }
-}));
+});
 
 // Store Model
-const StoreItem = mongoose.models.StoreItem || mongoose.model('StoreItem', new mongoose.Schema({
+const StoreItem = new mongoose.Schema({
     name: String,
     price: String,
     oldPrice: String,
     image: String,
     category: String,
     date: { type: Date, default: Date.now }
-}), 'store');
+});
 
 // Newsletter Model
-const Subscriber = mongoose.models.Subscriber || mongoose.model('Subscriber', new mongoose.Schema({
+const Subscriber = new mongoose.Schema({
     email: { type: String, unique: true, required: true },
     date: { type: Date, default: Date.now }
-}), 'subscribers');
+});
 
 
-const OTP = mongoose.models.OTP || mongoose.model('OTP', new mongoose.Schema({
+const OTP = new mongoose.Schema({
     email: String,
     code: String,
     createdAt: { type: Date, default: Date.now, expires: 300 } 
-}), 'otps');
+});
 
-const Activity = mongoose.models.Activity || mongoose.model('Activity', new mongoose.Schema({
+const Activity = new mongoose.Schema({
     text: String,
     date: { type: Date, default: Date.now }
-}), 'activities');
+});
 
+const ClubSchema = new mongoose.Schema({
+    name: String, 
+    owner: String, 
+    manager: String,
+    identityColor: String,
+    stadium: String,
+    budget: { type: Number, default: 800000000 }, // 800M Startup Grant
+    crp: { type: Number, default: 0 }, // Club Reputation Points
+    squad: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Player' }], // Link to Arena DB ID
+    isFranchise: { type: Boolean, default: true }
+});
+
+const NFALogSchema = new mongoose.Schema({
+    clubId: String,
+    type: String, // "Grant", "Transfer", "Stadium", "Fine"
+    amount: Number,
+    description: String,
+    date: { type: Date, default: Date.now }
+});
+
+// Attached to Arena DB
+const Player = arenaConn.model('Player', PlayerSchema);
+const User = arenaConn.model('User', UserSchema);
+const Tournament = arenaConn.model('Tournament', TournamentSchema);
+const Activity = arenaConn.model('Activity', new mongoose.Schema({ text: String, date: { type: Date, default: Date.now } }));
+const OTP = arenaConn.model('OTP', new mongoose.Schema({ email: String, code: String, createdAt: { type: Date, default: Date.now, expires: 300 } }));
+
+// Attached to NFA DB
+const Club = nfaConn.model('Club', ClubSchema);
+const NFALog = nfaConn.model('NFALog', NFALogSchema);
 
 // --- CORRECTED REQUEST OTP ROUTE (REPLACE LINES 105-183) ---
 app.post('/api/auth/request-otp', async (req, res) => {
