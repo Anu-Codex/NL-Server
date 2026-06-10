@@ -149,6 +149,24 @@ const BulletinSchema = new mongoose.Schema({
     date: { type: Date, default: Date.now }
 });
 const Bulletin = nfaConn.model('Bulletin', BulletinSchema);
+const MarketListingSchema = new mongoose.Schema({
+    playerId: String, // ID from Arena DB
+    playerName: String,
+    currentClub: String,
+    price: Number,
+    type: { type: String, default: "Sale" }, // Sale or Loan
+    expiry: Date, // For the countdown
+    date: { type: Date, default: Date.now }
+});
+const MarketListing = nfaConn.model('MarketListing', MarketListingSchema);
+
+// 2. Market Status: Global switch to Open/Close the window
+const MarketStatusSchema = new mongoose.Schema({
+    isOpen: { type: Boolean, default: false },
+    closingDate: Date
+});
+const MarketStatus = nfaConn.model('MarketStatus', MarketStatusSchema);
+
 
 // Attached to Arena DB
 const Player = arenaConn.model('Player', PlayerSchema);
@@ -1006,6 +1024,18 @@ app.get('/api/nfa/bulletins', async (req, res) => {
         res.json(data);
     } catch (e) { res.status(500).json([]); }
 });
+
+app.get('/api/nfa/market', async (req, res) => {
+    try {
+        const [status, listings, logs] = await Promise.all([
+            MarketStatus.findOne(),
+            MarketListing.find().sort({ date: -1 }),
+            nfaConn.model('NFALog').find({ type: "Transfer" }).sort({ date: -1 }).limit(10)
+        ]);
+        res.json({ status, listings, logs });
+    } catch (e) { res.status(500).json({ error: "Market Offline" }); }
+});
+
 // 4. START SERVER
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`🚀 Nexus Server Running on Port ${PORT}`));
