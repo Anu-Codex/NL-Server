@@ -16,7 +16,7 @@ nfaConn.on('connected', () => console.log("✅ DB 2: NFA Management Connected"))
 // 2. DEFINE SCHEMAS & MODELS
 
 // Player Stats Model (Global Rankings)
-const Player = new mongoose.Schema({
+const PlayerSchema = new mongoose.Schema({
     name: String,
     wins: { type: Number, default: 0 },
     points: { type: Number, default: 0 },
@@ -32,13 +32,13 @@ const Player = new mongoose.Schema({
 
 
 // Announcement Model
-const Announcement = new mongoose.Schema({
+const AnnouncementSchema = new mongoose.Schema({
     message: String,
     date: { type: Date, default: Date.now }
 });
 
 // Tournament Model (Roster, Fixtures, Standings)
-const Tournament = new mongoose.Schema({
+const TournamentSchema = new mongoose.Schema({
     title: String,
     totalTeams: String,
     status: String,
@@ -66,7 +66,7 @@ const Tournament = new mongoose.Schema({
     }],
     pendingApplicants: [{ name: String, whatsapp: String, date: { type: Date, default: Date.now } }]
 });
-const User = new mongoose.Schema({
+const UserSchema = new mongoose.Schema({
     username: { type: String, unique: true, required: true },
     password: { type: String, required: true }, // In production, use bcrypt to hash
     balance: { type: Number, default: 10000 },
@@ -75,13 +75,13 @@ const User = new mongoose.Schema({
     pendingAdCode: { type: String, default: null } 
 });
 
-const Bet = new mongoose.Schema({
+const BetSchema = new mongoose.Schema({
     userId: String, username: String, matchId: String, pick: String,
     slips: { type: Number, default: 1 }, multiplier: Number, status: { type: String, default: "Pending" }
 });
 
 // --- UPDATE PREDICTION SCHEMA ---
-const Prediction = new mongoose.Schema({
+const PredictionSchema = new mongoose.Schema({
     tourId: String, matchId: String, p1: String, p2: String,
     oddsP1: { type: Number, default: 2.0 }, // Multipliers
     oddsDraw: { type: Number, default: 3.0 },
@@ -90,13 +90,13 @@ const Prediction = new mongoose.Schema({
 });
 
 // --- FREE AGENT MODEL ---
-const FreeAgent = new mongoose.Schema({
+const FreeAgentSchema = new mongoose.Schema({
     name: String, division: String, playstyle: String, basePrice: String, whatsapp: String,
     status: { type: String, default: "Available" }, date: { type: Date, default: Date.now }
 });
 
 // Store Model
-const StoreItem = new mongoose.Schema({
+const StoreItemSchema = new mongoose.Schema({
     name: String,
     price: String,
     oldPrice: String,
@@ -106,19 +106,19 @@ const StoreItem = new mongoose.Schema({
 });
 
 // Newsletter Model
-const Subscriber = new mongoose.Schema({
+const SubscriberSchema = new mongoose.Schema({
     email: { type: String, unique: true, required: true },
     date: { type: Date, default: Date.now }
 });
 
 
-const OTP = new mongoose.Schema({
+const OTPSchema = new mongoose.Schema({
     email: String,
     code: String,
     createdAt: { type: Date, default: Date.now, expires: 300 } 
 });
 
-const Activity = new mongoose.Schema({
+const ActivitySchema = new mongoose.Schema({
     text: String,
     date: { type: Date, default: Date.now }
 });
