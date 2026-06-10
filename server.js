@@ -160,6 +160,23 @@ const OTP = arenaConn.model('OTP', new mongoose.Schema({ email: String, code: St
 // Attached to NFA DB
 const Club = nfaConn.model('Club', ClubSchema);
 const NFALog = nfaConn.model('NFALog', NFALogSchema);
+const MarketListingSchema = new mongoose.Schema({
+    playerId: String, // ID from Arena DB
+    playerName: String,
+    currentClub: String,
+    price: Number,
+    type: { type: String, default: "Sale" }, // Sale or Loan
+    expiry: Date, // For the countdown
+    date: { type: Date, default: Date.now }
+});
+const MarketListing = nfaConn.model('MarketListing', MarketListingSchema);
+
+// 2. Market Status: Global switch to Open/Close the window
+const MarketStatusSchema = new mongoose.Schema({
+    isOpen: { type: Boolean, default: false },
+    closingDate: Date
+});
+const MarketStatus = nfaConn.model('MarketStatus', MarketStatusSchema);
 
 // --- CORRECTED REQUEST OTP ROUTE (REPLACE LINES 105-183) ---
 app.post('/api/auth/request-otp', async (req, res) => {
@@ -1005,6 +1022,16 @@ app.get('/api/nfa/bulletins', async (req, res) => {
         const data = await Bulletin.find().sort({ date: -1 }).limit(5);
         res.json(data);
     } catch (e) { res.status(500).json([]); }
+});
+app.get('/api/nfa/market', async (req, res) => {
+    try {
+        const [status, listings, logs] = await Promise.all([
+            MarketStatus.findOne(),
+            MarketListing.find().sort({ date: -1 }),
+            nfaConn.model('NFALog').find({ type: "Transfer" }).sort({ date: -1 }).limit(10)
+        ]);
+        res.json({ status, listings, logs });
+    } catch (e) { res.status(500).json({ error: "Market Offline" }); }
 });
 // 4. START SERVER
 const PORT = process.env.PORT || 5000;
