@@ -949,6 +949,49 @@ app.post('/api/update-gs-ga-duel', async (req, res) => {
         res.status(500).json({ error: "Database sync failed" });
     }
 });
+app.get('/api/nfa/clubs', async (req, res) => {
+    try {
+        const clubs = await Club.find().sort({ crp: -1 });
+        res.json(clubs);
+    } catch (e) { res.status(500).send(e); }
+});
+
+// 3. Admin: Initialize the 8 Franchise Clubs
+app.post('/api/admin/nfa/init-franchise', async (req, res) => {
+    const { auth } = req.body;
+    if(auth !== "nexus2024") return res.status(403).send("Unauthorized");
+    
+    const clubNames = ["Titan FC", "Shadow Kings", "Nexus United", "Apex Strikers", "Vortex FC", "Iron Guardians", "Neon Pulse", "Elite XI"];
+    try {
+        await Club.deleteMany({}); // Clear old data in NFA DB
+        const created = await Club.insertMany(clubNames.map(name => ({
+            name,
+            owner: "Pending",
+            budget: 800000000,
+            stadium: `${name} Arena`
+        })));
+        res.json({ success: true, clubs: created });
+    } catch (e) { res.status(500).send(e); }
+});
+
+// 4. Spending Logic (Financial Fair Play)
+app.post('/api/nfa/transaction', async (req, res) => {
+    const { clubId, amount, type, description } = req.body;
+    try {
+        const club = await Club.findById(clubId);
+        if(type === "Debit" && club.budget < amount) {
+            return res.status(400).json({ error: "FFP Violation: Insufficient Credits" });
+        }
+        
+        club.budget = (type === "Credit") ? club.budget + amount : club.budget - amount;
+        await club.save();
+        
+        const log = new NFALog({ clubId, type, amount, description });
+        await log.save();
+        
+        res.json({ success: true, newBalance: club.budget });
+    } catch (e) { res.status(500).send(e); }
+});
 
 // 4. START SERVER
 const PORT = process.env.PORT || 5000;
