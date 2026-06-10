@@ -142,6 +142,13 @@ const NFALogSchema = new mongoose.Schema({
     description: String,
     date: { type: Date, default: Date.now }
 });
+const BulletinSchema = new mongoose.Schema({
+    title: String,
+    content: String,
+    severity: { type: String, default: "Info" }, // Info, Warning, Critical
+    date: { type: Date, default: Date.now }
+});
+const Bulletin = nfaConn.model('Bulletin', BulletinSchema);
 
 // Attached to Arena DB
 const Player = arenaConn.model('Player', PlayerSchema);
@@ -993,6 +1000,12 @@ app.post('/api/nfa/transaction', async (req, res) => {
     } catch (e) { res.status(500).send(e); }
 });
 
+app.get('/api/nfa/bulletins', async (req, res) => {
+    try {
+        const data = await Bulletin.find().sort({ date: -1 }).limit(5);
+        res.json(data);
+    } catch (e) { res.status(500).json([]); }
+});
 // 4. START SERVER
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`🚀 Nexus Server Running on Port ${PORT}`));
