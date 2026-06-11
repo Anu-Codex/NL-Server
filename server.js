@@ -166,7 +166,15 @@ const MarketStatusSchema = new mongoose.Schema({
     closingDate: Date
 });
 const MarketStatus = nfaConn.model('MarketStatus', MarketStatusSchema);
-
+const DraftPickSchema = new mongoose.Schema({
+    clubId: String,
+    clubName: String,
+    playerId: String,
+    playerName: String,
+    round: Number,
+    date: { type: Date, default: Date.now }
+});
+const DraftPick = nfaConn.model('DraftPick', DraftPickSchema);
 
 // Attached to Arena DB
 const Player = arenaConn.model('Player', PlayerSchema);
@@ -1050,7 +1058,26 @@ app.get('/api/nfa/club/:id', async (req, res) => {
         res.json({ club, squad: squadDetails });
     } catch (e) { res.status(500).json({ error: "Database Link Error" }); }
 });
+app.get('/api/nfa/draft/prospects', async (req, res) => {
+    try {
+        // Get all signed player IDs from all clubs
+        const clubs = await nfaConn.model('Club').find({}, 'squad');
+        const signedIds = clubs.flatMap(c => c.squad);
 
+        // Fetch players from Arena DB who are NOT in the signed list
+        const prospects = await arenaConn.model('Player').find({
+            _id: { $nin: signedIds }
+        }, 'name avatar points playstyle');
+
+        res.json(prospects);
+    } catch (e) { res.status(500).json({ error: "Draft Database Error" }); }
+});
+app.get('/api/nfa/draft/history', async (req, res) => {
+    try {
+        const history = await DraftPick.find().sort({ date: -1 });
+        res.json(history);
+    } catch (e) { res.status(500).json([]); }
+});
 // 4. START SERVER
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`🚀 Nexus Server Running on Port ${PORT}`));
