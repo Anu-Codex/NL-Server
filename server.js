@@ -1035,6 +1035,21 @@ app.get('/api/nfa/market', async (req, res) => {
         res.json({ status, listings, logs });
     } catch (e) { res.status(500).json({ error: "Market Offline" }); }
 });
+// --- GET SINGLE CLUB WITH SQUAD DATA ---
+app.get('/api/nfa/club/:id', async (req, res) => {
+    try {
+        const club = await Club.findById(req.params.id);
+        if (!club) return res.status(404).json({ error: "Club not found" });
+
+        // CROSS-DB Handshake: 
+        // We take the IDs from the NFA Club squad and find their details in the Arena DB
+        const squadDetails = await Player.find({ 
+            _id: { $in: club.squad } 
+        }, 'name avatar goalsFor points');
+
+        res.json({ club, squad: squadDetails });
+    } catch (e) { res.status(500).json({ error: "Database Link Error" }); }
+});
 
 // 4. START SERVER
 const PORT = process.env.PORT || 5000;
