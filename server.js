@@ -131,7 +131,13 @@ const ClubSchema = new mongoose.Schema({
     stadium: String,
     budget: { type: Number, default: 800000000 }, // 800M Startup Grant
     crp: { type: Number, default: 0 }, // Club Reputation Points
-    squad: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Player' }], // Link to Arena DB ID
+    squad: [{
+        playerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Player' },
+        playerName: String,
+        releaseClause: { type: Number, default: 50000000 }, // e.g. 50M
+        weeklyWage: { type: Number, default: 100000 },
+        contractType: { type: String, default: "Permanent" } // Permanent or Loan
+    }],
     isFranchise: { type: Boolean, default: true }
 });
 
@@ -1116,6 +1122,39 @@ app.post('/api/admin/nfa/market-toggle', async (req, res) => {
     try {
         await MarketStatus.findOneAndUpdate({}, { isOpen, closingDate }, { upsert: true });
         res.json({ success: true });
+    } catch (e) { res.status(500).send(e); }
+});
+app.post('/api/nfa/market/activate-buyout', async (req, res) => {
+    const { buyerClubId, sellerClubId, playerId, price } = req.body;
+    try {
+        const buyer = await Club.findById(buyerClubId);
+        const seller = await Club.findById(sellerClubId);
+
+        if (buyer.budget < price) return res.status(400).json({ error: "FFP Violation: Insufficient Funds" });
+
+        // 1. Financial Exchange
+        buyer.budget -= price;
+        seller.budget += price;
+
+        // 2. Transfer the Player
+        const playerIndex = seller.squad.findIndex(p => p.playerId.toString() === playerId);
+        const playerData = seller.squad[playerIndex];
+        
+        seller.squad.splice(playerIndex, 1); // Remove from seller
+        buyer.squad.push(playerData); // Add to buyer
+
+        await buyer.save();
+        await seller.save();
+
+        // 3. Log to NFA History
+        await new NFALog({ 
+            clubId: buyerClubId, 
+            type: "Transfer", 
+            amount: price, 
+            description: `RELEASE CLAUSE ACTIVATED: Signed ${playerData.playerName} from ${seller.name}` 
+        }).save();
+
+        res.json({ success: true, newBalance: buyer.budget });
     } catch (e) { res.status(500).send(e); }
 });
 // 4. START SERVER
