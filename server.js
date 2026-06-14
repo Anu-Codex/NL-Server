@@ -1078,6 +1078,46 @@ app.get('/api/nfa/draft/history', async (req, res) => {
         res.json(history);
     } catch (e) { res.status(500).json([]); }
 });
+// --- ADMIN NFA ROUTES ---
+
+// 1. Update Club Identity
+app.post('/api/admin/nfa/update-club', async (req, res) => {
+    try {
+        await Club.findByIdAndUpdate(req.body.id, req.body.data);
+        res.json({ success: true });
+    } catch (e) { res.status(500).send(e); }
+});
+
+// 2. Post Bulletin
+app.post('/api/admin/nfa/bulletin', async (req, res) => {
+    try {
+        await new Bulletin(req.body).save();
+        res.json({ success: true });
+    } catch (e) { res.status(500).send(e); }
+});
+
+// 3. Squad Assignment (The Cross-DB Bridge)
+app.post('/api/admin/nfa/assign-squad', async (req, res) => {
+    const { playerId, clubId } = req.body;
+    try {
+        const club = await Club.findById(clubId);
+        // Ensure player isn't already in squad
+        if (!club.squad.includes(playerId)) {
+            club.squad.push(playerId);
+            await club.save();
+        }
+        res.json({ success: true });
+    } catch (e) { res.status(500).send(e); }
+});
+
+// 4. Set Market Status
+app.post('/api/admin/nfa/market-toggle', async (req, res) => {
+    const { isOpen, closingDate } = req.body;
+    try {
+        await MarketStatus.findOneAndUpdate({}, { isOpen, closingDate }, { upsert: true });
+        res.json({ success: true });
+    } catch (e) { res.status(500).send(e); }
+});
 // 4. START SERVER
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`🚀 Nexus Server Running on Port ${PORT}`));
