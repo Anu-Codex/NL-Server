@@ -642,11 +642,10 @@ app.get('/api/predictions', async (req, res) => {
 });
 // --- FIX 2: NO DELETION (UPSERT LOGIC) ---
 app.post('/api/predictions/open', async (req, res) => {
-    // We use matchId because it is unique for every single game
-    const { matchId } = req.body; 
+    const { matchId } = req.body;
     try {
-        // The "upsert" logic updates the existing match or creates a new one
-        // without deleting anything else.
+        // This finds the match by its unique ID. 
+        // If it exists, it updates the odds. If not, it creates it.
         await Prediction.findOneAndUpdate(
             { matchId: matchId }, 
             { ...req.body, status: "Available" }, 
@@ -654,8 +653,7 @@ app.post('/api/predictions/open', async (req, res) => {
         );
         res.json({ success: true });
     } catch (e) {
-        console.error("Prediction Open Error:", e);
-        res.status(500).json({ error: "Failed to sync prediction" });
+        res.status(500).json({ error: "Server Error" });
     }
 });
 
