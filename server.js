@@ -645,29 +645,40 @@ app.get('/api/predictions', async (req, res) => {
 });
 
 // 2. OPEN/UPDATE A PREDICTION FROM DASHBOARD
+// --- 1. ENSURE MODEL IS ON ARENA DB ---
+// Find your PredictionSchema and then use this line:
+// --- 2. THE ULTIMATE OPEN ROUTE (Guaranteed Sync) ---
 app.post('/api/predictions/open', async (req, res) => {
+    // Destructure everything to be 100% sure we receive it
     const { matchId, p1, p2, tourId, oddsP1, oddsDraw, oddsP2 } = req.body;
+    
     try {
-        // Use findOneAndUpdate so it updates the same match if you click it again
-        await arenaConn.model('Prediction').findOneAndUpdate(
-            { matchId: matchId },
+        console.log(`📡 Opening Match: ${p1} vs ${p2} (ID: ${matchId})`);
+
+        // We use matchId as the filter to prevent duplicates.
+        // { upsert: true } means: "If not found, create new. If found, update."
+        const result = await Prediction.findOneAndUpdate(
+            { matchId: matchId }, 
             { 
-                tourId, p1, p2, 
+                tourId, 
+                p1, 
+                p2, 
                 oddsP1: parseFloat(oddsP1), 
                 oddsDraw: parseFloat(oddsDraw), 
                 oddsP2: parseFloat(oddsP2), 
                 status: "Available" 
-            },
-            { upsert: true, new: true }
+            }, 
+            { upsert: true, new: true, setDefaultsOnInsert: true }
         );
-        
-        // Log to activity ticker
-        await new (arenaConn.model('Activity'))({ text: `BET OPEN: ${p1} vs ${p2} at ${oddsP1}x odds!` }).save();
-        
-        res.json({ success: true });
-    } catch (e) { 
-        console.error("Open Pred Error:", e);
-        res.status(500).json({ error: "Database Sync Error" }); 
+
+        // LOG TO ACTIVITY TICKER (Also on Arena DB)
+        const Activity = arenaConn.model('Activity');
+        await new Activity({ text: `BET OPEN: ${p1} vs ${p2} at ${oddsP1}x odds!` }).save();
+
+        res.json({ success: true, data: result });
+    } catch (e) {
+        console.error("❌ SYNC ERROR:", e.message);
+        res.status(500).json({ error: "Database Sync Error", details: e.message });
     }
 });
 // --- FIX 3: GLOBAL SETTLE ---
