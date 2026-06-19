@@ -806,23 +806,78 @@ app.get('/api/user-bets-all/:userId', async (req, res) => {
     } catch (e) { res.json([]); }
 });
 
-// --- UPDATE BET PLACING ROUTE (Check Status) ---
+// --- UPDATED BET PLACING ROUTE WITH BREVO SLIP ---
 app.post('/api/bets/place', async (req, res) => {
     const { userId, matchId, pick, slips, multiplier } = req.body;
     try {
         const pred = await Prediction.findOne({ matchId });
-        if (pred.status !== "Available") return res.status(403).json({ error: "Betting is CLOSED for this match!" });
+        if (!pred || pred.status !== "Available") return res.status(403).json({ error: "Betting Locked" });
 
-        const cost = slips * 100;
         const user = await User.findById(userId);
-        if (user.balance < cost) return res.status(400).json({ error: "Insufficient ₦" });
+        const cost = slips * 100;
+        if (user.balance < cost) return res.status(400).json({ error: "Insufficient 🪙 Credits" });
 
+        // 1. Process Transaction
         user.balance -= cost;
         await user.save();
         await new Bet({ userId, username: user.username, matchId, pick, slips, multiplier }).save();
-        await new Activity({ text: `New Prediction Slip purchased for match ID: ${matchId.slice(-5)}`}).save();
+
+        // 2. Prepare Data for Brevo
+        const teamName = pick === 'p1' ? pred.p1 : (pick === 'p2' ? pred.p2 : "Draw");
+        const expectedPayout = (cost * multiplier).toLocaleString();
+
+        // 3. Send Professional Digital Slip via Brevo
+        fetch('https://api.brevo.com/v3/smtp/email', {
+            method: 'POST',
+            headers: {
+                'accept': 'application/json',
+                'api-key': process.env.BREVO_API_KEY,
+                'content-type': 'application/json'
+            },
+            body: JSON.stringify({
+                sender: { name: "Nexus Bookmaker", email: "mysticfcmlegends@gmail.com" },
+                to: [{ email: user.username }], // Assuming username is their email
+                subject: `Bet Placed: ${pred.p1} vs ${pred.p2}`,
+                htmlContent: `
+                    <div style="background:#f4f7f6; padding:20px; font-family: sans-serif;">
+                        <div style="max-width:400px; margin:auto; background:#fff; border-radius:10px; overflow:hidden; border:1px solid #ddd;">
+                            <div style="background:#0041FF; padding:20px; text-align:center; color:white;">
+                                <h2 style="margin:0;">NEXUS 1BET</h2>
+                                <small>OFFICIAL BETTING SLIP</small>
+                            </div>
+                            <div style="padding:20px; color:#333;">
+                                <p style="font-size:12px; color:#888;">MATCH ID: ${matchId.slice(-8).toUpperCase()}</p>
+                                <h3 style="margin:10px 0; border-bottom:1px solid #eee; padding-bottom:10px;">
+                                    ${pred.p1} <span style="color:#888; font-size:14px;">VS</span> ${pred.p2}
+                                </h3>
+                                <div style="display:flex; justify-content:space-between; margin:10px 0;">
+                                    <span>Selection:</span> <b>${teamName}</b>
+                                </div>
+                                <div style="display:flex; justify-content:space-between; margin:10px 0;">
+                                    <span>Quantity:</span> <b>${slips} Slips</b>
+                                </div>
+                                <div style="display:flex; justify-content:space-between; margin:10px 0;">
+                                    <span>Total Stake:</span> <b>🪙 ${cost}</b>
+                                </div>
+                                <div style="display:flex; justify-content:space-between; margin:10px 0; color:#0041FF;">
+                                    <span>Odds:</span> <b>${multiplier}x</b>
+                                </div>
+                                <div style="margin-top:20px; background:#eef9f5; padding:15px; border-radius:8px; text-align:center;">
+                                    <span style="display:block; font-size:12px; color:#27ae60;">EXPECTED PAYOUT</span>
+                                    <b style="font-size:24px; color:#27ae60;">🪙 ${expectedPayout}</b>
+                                </div>
+                            </div>
+                            <div style="background:#f9f9f9; padding:15px; text-align:center; font-size:10px; color:#aaa;">
+                                Generated on ${new Date().toLocaleString()}<br>
+                                Good luck, Striker!
+                            </div>
+                        </div>
+                    </div>`
+            })
+        }).catch(e => console.log("Mail Error"));
+
         res.json({ success: true, newBalance: user.balance });
-    } catch (e) { res.status(500).json({ error: "Fail" }); }
+    } catch (e) { res.status(500).json({ error: "Server Error" }); }
 });
 // --- DAILY REWARD ROUTE ---
 app.post('/api/auth/claim-daily', async (req, res) => {
