@@ -630,33 +630,45 @@ app.post('/api/update-profile', async (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// --- FIX: PREDICTION ROUTES (USING ARENA CONN) ---
+
+// 1. GET ALL ACTIVE PREDICTIONS
 app.get('/api/predictions', async (req, res) => {
     try {
-        // This ensures both "Open", "Available", and "Closed" matches show up.
-        // Matches only vanish when you settle them (WON/LOST).
-        const data = await Prediction.find({ status: { $ne: "Settled" } });
+        // We fetch everything that is not "Settled"
+        const data = await arenaConn.model('Prediction').find({ status: { $ne: "Settled" } });
         res.json(data);
     } catch (err) { 
-        res.status(500).json({ error: "Prediction fetch failed" }); 
-    }
-});
-// --- FIX 2: NO DELETION (UPSERT LOGIC) ---
-app.post('/api/predictions/open', async (req, res) => {
-    const { matchId } = req.body;
-    try {
-        // This finds the match by its unique ID. 
-        // If it exists, it updates the odds. If not, it creates it.
-        await Prediction.findOneAndUpdate(
-            { matchId: matchId }, 
-            { ...req.body, status: "Available" }, 
-            { upsert: true, new: true }
-        );
-        res.json({ success: true });
-    } catch (e) {
-        res.status(500).json({ error: "Server Error" });
+        res.status(500).json({ error: "Fetch failed" }); 
     }
 });
 
+// 2. OPEN/UPDATE A PREDICTION FROM DASHBOARD
+app.post('/api/predictions/open', async (req, res) => {
+    const { matchId, p1, p2, tourId, oddsP1, oddsDraw, oddsP2 } = req.body;
+    try {
+        // Use findOneAndUpdate so it updates the same match if you click it again
+        await arenaConn.model('Prediction').findOneAndUpdate(
+            { matchId: matchId },
+            { 
+                tourId, p1, p2, 
+                oddsP1: parseFloat(oddsP1), 
+                oddsDraw: parseFloat(oddsDraw), 
+                oddsP2: parseFloat(oddsP2), 
+                status: "Available" 
+            },
+            { upsert: true, new: true }
+        );
+        
+        // Log to activity ticker
+        await new (arenaConn.model('Activity'))({ text: `BET OPEN: ${p1} vs ${p2} at ${oddsP1}x odds!` }).save();
+        
+        res.json({ success: true });
+    } catch (e) { 
+        console.error("Open Pred Error:", e);
+        res.status(500).json({ error: "Database Sync Error" }); 
+    }
+});
 // --- FIX 3: GLOBAL SETTLE ---
 app.post('/api/bets/settle', async (req, res) => {
     const { matchId, result } = req.body;
