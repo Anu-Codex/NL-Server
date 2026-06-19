@@ -189,6 +189,7 @@ const Tournament = arenaConn.model('Tournament', TournamentSchema);
 const Activity = arenaConn.model('Activity', new mongoose.Schema({ text: String, date: { type: Date, default: Date.now } }));
 const OTP = arenaConn.model('OTP', new mongoose.Schema({ email: String, code: String, createdAt: { type: Date, default: Date.now, expires: 300 } }));
 const Prediction = arenaConn.model('Prediction', PredictionSchema);
+const Bet = arenaConn.models.Bet || arenaConn.model('Bet', BetSchema);
 
 // Attached to NFA DB
 const Club = nfaConn.model('Club', ClubSchema);
