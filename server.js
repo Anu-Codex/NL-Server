@@ -296,6 +296,8 @@ app.post('/api/auth/verify-otp', async (req, res) => {
 
 // 3. API ROUTES
 
+app.get('/api/admin/clear-old-bets', async (req, res) => { await arenaConn.model('Prediction').deleteMany({}); res.send("Cleared"); });
+
 // --- GLOBAL RANKINGS ---
 app.get('/api/rankings', async (req, res) => {
     try {
